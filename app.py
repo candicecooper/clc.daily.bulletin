@@ -942,8 +942,13 @@ if params.get("display") == "true":
     </style>
     """, unsafe_allow_html=True)
 
-    # Auto-refresh every 5 minutes
-    st.markdown("""<meta http-equiv="refresh" content="300">""", unsafe_allow_html=True)
+    # Auto-refresh every 5 minutes using Streamlit
+    import time
+    if "display_last_refresh" not in st.session_state:
+        st.session_state.display_last_refresh = time.time()
+    if time.time() - st.session_state.display_last_refresh > 300:
+        st.session_state.display_last_refresh = time.time()
+        st.rerun()
 
     # Google fonts
     st.markdown("""<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">""", unsafe_allow_html=True)
