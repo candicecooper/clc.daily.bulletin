@@ -459,6 +459,245 @@ def load_bulletin(d: date):
             data[k] = v
     return data
 
+
+# ══════════════════════════════════════════════════════════════
+# DISPLAY MODE — Staff Room Full-Screen View
+# Access via: your-app-url/?display=true
+# ══════════════════════════════════════════════════════════════
+
+# Check URL params for display mode
+params = st.query_params
+if params.get("display") == "true":
+
+    # Load today's bulletin
+    today = date.today()
+    d_data = load_bulletin(today)
+
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] { background: #0f1a0f !important; }
+    .main .block-container { padding: 0 !important; max-width: 100% !important; }
+    [data-testid="stHeader"] { display: none; }
+    #MainMenu, footer, .stDeployButton { display: none; }
+    [data-baseweb="tab-list"] { display: none !important; }
+    [data-baseweb="tab-panel"] { padding: 0 !important; }
+    /* hide the normal tabs rendered above */
+    section[data-testid="stVerticalBlock"] > div:first-child { display: none; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Auto-refresh every 5 minutes using Streamlit
+    import time
+    if "display_last_refresh" not in st.session_state:
+        st.session_state.display_last_refresh = time.time()
+    if time.time() - st.session_state.display_last_refresh > 300:
+        st.session_state.display_last_refresh = time.time()
+        st.rerun()
+
+    # Google fonts
+    st.markdown("""<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">""", unsafe_allow_html=True)
+
+    # ── Header banner ──
+    sr = d_data.get("staff_responsibilities", {})
+    fun = d_data.get("fun_fact", "")
+    now_str = datetime.now().strftime("%I:%M %p")
+
+    st.markdown(f"""
+    <style>
+    .display-header {{
+      background: linear-gradient(135deg, #1a2e44 0%, #1e3d1e 100%);
+      padding: 0.6rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 3px solid #6BBF4E;
+    }}
+    .display-header-title {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; color: white; font-weight: 700; letter-spacing: 0.05em; }}
+    .display-header-date {{ font-family: 'DM Mono', monospace; font-size: 1rem; color: #6BBF4E; font-weight: 600; letter-spacing: 0.08em; }}
+    .display-header-time {{ font-family: 'DM Mono', monospace; font-size: 1.4rem; color: #e8a125; font-weight: 700; }}
+    .dp {{ background: #1a2a1a; border: 1px solid #2a3d2a; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }}
+    .dp-header {{ padding: 0.3rem 0.6rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: white; }}
+    .dp-header.green  {{ background: #4a8f33; }}
+    .dp-header.navy   {{ background: #1a2e44; }}
+    .dp-header.brown  {{ background: #7a5c4a; }}
+    .dp-header.amber  {{ background: #c97b1a; color: #1a2e44; }}
+    .dp-header.blue   {{ background: #3a6a9a; }}
+    .dp-header.purple {{ background: #6a4a9a; }}
+    .dp-header.slate  {{ background: #4a5a6a; }}
+    .dp-body {{ padding: 0.4rem 0.5rem; }}
+    .dt {{ width: 100%; border-collapse: collapse; font-size: 0.62rem; color: #c8d8c8; font-family: 'DM Sans', sans-serif; }}
+    .dt th {{ color: #6BBF4E; font-weight: 600; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2rem 0.3rem; border-bottom: 1px solid #2a3d2a; }}
+    .dt td {{ padding: 0.18rem 0.3rem; border-bottom: 1px solid #1e2e1e; vertical-align: top; line-height: 1.3; }}
+    .dt tr:last-child td {{ border-bottom: none; }}
+    .dt-em {{ color: #3a4a3a; font-style: italic; font-size: 0.55rem; }}
+    .dp-empty {{ color: #3a4a3a; font-size: 0.6rem; padding: 0.3rem; font-style: italic; font-family: 'DM Sans', sans-serif; }}
+    .vb-time {{ font-family: 'DM Mono', monospace; font-size: 0.58rem; color: #5a7a5a; }}
+    .vb-tag {{ background: #2a4a2a; color: #6BBF4E; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; }}
+    .kitchen-val {{ background: #c97b1a; border-radius: 4px; padding: 0.1rem 0.4rem; color: #1a2e44; font-weight: 800; font-size: 0.65rem; display: inline-block; }}
+    .resp-label {{ font-size: 0.58rem; color: #6BBF4E; font-weight: 600; }}
+    .resp-val {{ font-size: 0.62rem; color: #c8d8c8; }}
+    .fact-bar {{ background: #1e2e1e; border-top: 2px solid #2a3d2a; padding: 0.4rem 1.5rem; font-size: 0.72rem; color: #a8c8a8; display: flex; align-items: center; gap: 0.75rem; font-family: 'DM Sans', sans-serif; }}
+    .fact-label {{ color: #e8a125; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }}
+    .pc-wrap {{ overflow-x: auto; }}
+    .pc-table {{ min-width: 900px; }}
+    .slot {{ text-align: center; font-family: 'DM Mono', monospace; font-size: 0.55rem; }}
+    .slot.filled {{ background: #1e3d1e; color: #6BBF4E; font-weight: 600; }}
+    </style>
+
+    <div class="display-header">
+      <div>
+        <div class="display-header-title">Cowandilla Learning Centre &mdash; Daily Bulletin</div>
+        <div class="display-header-date">{today.strftime("%A %-d %B %Y").upper()}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1.5rem;">
+        <div class="display-header-time">{now_str}</div>
+        <a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Helper for table rows ──
+    def tbl_rows(rows, keys):
+        filtered = [r for r in rows if any(r.get(k,"") for k in keys)]
+        if not filtered:
+            return '<tr><td colspan="20" class="dt-em">None today</td></tr>'
+        return "".join(["<tr>" + "".join([f"<td>{r.get(k,'')}</td>" for k in keys]) + "</tr>" for r in filtered])
+
+    # ── ROW 1: 5 columns ──
+    r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns([2,2,2.5,1.5,2])
+
+    with r1c1:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header green">🙅 Staff & Student Absent</div><div class="dp-body">
+        <table class="dt"><tr><th>Staff</th><th>TRT</th><th>Student</th><th>Program</th><th>Reason</th></tr>
+        {tbl_rows(d_data.get("staff_absent",[]), ["Staff Absence","TRT","Student Absence","Program","Reason"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r1c2:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header blue">🚌 Excursions</div><div class="dp-body">
+        <table class="dt"><tr><th>Program</th><th>Staff</th><th>Depart</th><th>Return</th><th>Location</th></tr>
+        {tbl_rows(d_data.get("excursions",[]), ["Program","Staff Member","Time Departing","Time Returning","Location"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r1c3:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header navy">🤝 Staff Meetings</div><div class="dp-body">
+        <table class="dt"><tr><th>Type</th><th>Staff</th><th>Location</th><th>Depart</th><th>Return</th><th>Student</th></tr>
+        {tbl_rows(d_data.get("staff_meetings",[]), ["Type","Staff Member","Location","Time Departing","Time Returning","Student"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r1c4:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header brown">📥 Entry Meetings</div><div class="dp-body">
+        <table class="dt"><tr><th>Time</th><th>Program</th><th>Student</th></tr>
+        {tbl_rows(d_data.get("entry_meetings",[]), ["Time","Program","Student"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r1c5:
+        # Staff Responsibilities
+        kitchen = sr.get("kitchen_duties","") or "—"
+        pd_focus = sr.get("meeting_pd_focus","") or "—"
+        chair = sr.get("chair","") or "—"
+        minutes = sr.get("minutes","") or "—"
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header amber">⭐ Staff Responsibilities</div><div class="dp-body">
+        <div style="margin-bottom:0.35rem;"><span class="kitchen-val">🍳 Kitchen: {kitchen}</span></div>
+        <div style="margin-bottom:0.2rem;"><span class="resp-label">📌 PD Focus</span><br><span class="resp-val">{pd_focus}</span></div>
+        <div style="margin-bottom:0.2rem;"><span class="resp-label">🪑 Chair</span><br><span class="resp-val">{chair}</span></div>
+        <div><span class="resp-label">📝 Minutes</span><br><span class="resp-val">{minutes}</span></div>
+        </div></div>
+        """, unsafe_allow_html=True)
+
+    # ── ROW 2: Travel + Vehicle + NIT ──
+    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns([2,2,2,1.5,1])
+
+    with r2c1:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header blue">🟦 JP – Travel</div><div class="dp-body">
+        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
+        {tbl_rows(d_data.get("travel_jp",[]), ["Student","Transport To","Transport From","Times"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r2c2:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header purple">🟣 PY – Travel</div><div class="dp-body">
+        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
+        {tbl_rows(d_data.get("travel_py",[]), ["Student","Transport To","Transport From","Times"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r2c3:
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header slate">🟫 SY – Travel</div><div class="dp-body">
+        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
+        {tbl_rows(d_data.get("travel_sy",[]), ["Student","Transport To","Transport From","Times"])}
+        </table></div></div>
+        """, unsafe_allow_html=True)
+
+    with r2c4:
+        vb = d_data.get("vehicle_bookings", {})
+        times = ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]
+        vb_rows = "".join([
+            f'<tr><td class="vb-time">{t}</td>'
+            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("van","") + "</span>" if vb.get(t,{}).get("van","") else ""}</td>'
+            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("kia","") + "</span>" if vb.get(t,{}).get("kia","") else ""}</td></tr>'
+            for t in times
+        ])
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header navy">🚗 Vehicles</div><div class="dp-body">
+        <table class="dt"><tr><th>Time</th><th>VAN</th><th>KIA</th></tr>{vb_rows}</table>
+        </div></div>
+        """, unsafe_allow_html=True)
+
+    with r2c5:
+        nit = d_data.get("nit_booking","") or '<span class="dp-empty">None today</span>'
+        msgs = d_data.get("additional_messages",[])
+        msg_rows = tbl_rows(msgs, ["Staff Member","Visitor","Reason","Arriving/Departing"])
+        st.markdown(f"""
+        <div class="dp"><div class="dp-header green">📋 NIT Booking</div><div class="dp-body">
+        <p style="font-size:0.62rem;color:#c8d8c8;margin:0;line-height:1.4;">{nit}</p>
+        </div></div>
+        <div class="dp"><div class="dp-header slate">💬 Messages</div><div class="dp-body">
+        <table class="dt"><tr><th>Staff</th><th>Visitor</th><th>Reason</th><th>Arr/Dep</th></tr>{msg_rows}</table>
+        </div></div>
+        """, unsafe_allow_html=True)
+
+    # ── ROW 3: Program Changes (full width) ──
+    pc_rows = d_data.get("program_changes", [])
+    pc_filtered = [r for r in pc_rows if any(r.get(k,"") for k in r)]
+    time_slots = ["9:00-9:30","9:30-10:00","10:00-10:30","10:30-11:00","11:00-11:30",
+                  "11:30-12:00","12:00-12:30","12:30-1:00","1:00-1:30","1:30-2:00","2:00-2:30","2:30-2:45"]
+    pc_headers = "<th>TRT</th><th>CLC Resp.</th><th>Type</th><th>Staff Absent</th><th>JP</th><th>PY</th><th>SY</th><th>NIT</th>" + "".join([f"<th>{s}</th>" for s in time_slots])
+    pc_body = ""
+    if pc_filtered:
+        for r in pc_filtered:
+            cells = "".join([f"<td>{r.get(k,'')}</td>" for k in ["TRT","CLC Responsibility","Type","CLC Staff Absent","JP","PY","SY","NIT"]])
+            cells += "".join([f'<td class="slot {"filled" if r.get(s,"") else ""}">{r.get(s,"")}</td>' for s in time_slots])
+            pc_body += f"<tr>{cells}</tr>"
+    else:
+        pc_body = '<tr><td colspan="20" class="dt-em">No program changes today</td></tr>'
+
+    st.markdown(f"""
+    <div class="dp"><div class="dp-header green">📊 Program Changes</div><div class="dp-body pc-wrap">
+    <table class="dt pc-table"><tr>{pc_headers}</tr>{pc_body}</table>
+    </div></div>
+    """, unsafe_allow_html=True)
+
+    # ── Fun fact footer ──
+    st.markdown(f"""
+    <div class="fact-bar">
+      <span class="fact-label">💡 Fun Fact</span>
+      <span>{fun if fun else "No fun fact entered for today"}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.stop()
+
+
 # ── TOP NAV ───────────────────────────────────────────────────
 edit = st.session_state.edit_mode and st.session_state.authenticated
 
@@ -915,240 +1154,3 @@ with login_tab:
                 st.error("Incorrect password.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ══════════════════════════════════════════════════════════════
-# DISPLAY MODE — Staff Room Full-Screen View
-# Access via: your-app-url/?display=true
-# ══════════════════════════════════════════════════════════════
-
-# Check URL params for display mode
-params = st.query_params
-if params.get("display") == "true":
-
-    # Load today's bulletin
-    today = date.today()
-    d_data = load_bulletin(today)
-
-    st.markdown("""
-    <style>
-    [data-testid="stAppViewContainer"] { background: #0f1a0f !important; }
-    .main .block-container { padding: 0 !important; max-width: 100% !important; }
-    [data-testid="stHeader"] { display: none; }
-    #MainMenu, footer, .stDeployButton { display: none; }
-    [data-baseweb="tab-list"] { display: none !important; }
-    [data-baseweb="tab-panel"] { padding: 0 !important; }
-    /* hide the normal tabs rendered above */
-    section[data-testid="stVerticalBlock"] > div:first-child { display: none; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Auto-refresh every 5 minutes using Streamlit
-    import time
-    if "display_last_refresh" not in st.session_state:
-        st.session_state.display_last_refresh = time.time()
-    if time.time() - st.session_state.display_last_refresh > 300:
-        st.session_state.display_last_refresh = time.time()
-        st.rerun()
-
-    # Google fonts
-    st.markdown("""<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">""", unsafe_allow_html=True)
-
-    # ── Header banner ──
-    sr = d_data.get("staff_responsibilities", {})
-    fun = d_data.get("fun_fact", "")
-    now_str = datetime.now().strftime("%I:%M %p")
-
-    st.markdown(f"""
-    <style>
-    .display-header {{
-      background: linear-gradient(135deg, #1a2e44 0%, #1e3d1e 100%);
-      padding: 0.6rem 1.5rem;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 3px solid #6BBF4E;
-    }}
-    .display-header-title {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; color: white; font-weight: 700; letter-spacing: 0.05em; }}
-    .display-header-date {{ font-family: 'DM Mono', monospace; font-size: 1rem; color: #6BBF4E; font-weight: 600; letter-spacing: 0.08em; }}
-    .display-header-time {{ font-family: 'DM Mono', monospace; font-size: 1.4rem; color: #e8a125; font-weight: 700; }}
-    .dp {{ background: #1a2a1a; border: 1px solid #2a3d2a; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }}
-    .dp-header {{ padding: 0.3rem 0.6rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: white; }}
-    .dp-header.green  {{ background: #4a8f33; }}
-    .dp-header.navy   {{ background: #1a2e44; }}
-    .dp-header.brown  {{ background: #7a5c4a; }}
-    .dp-header.amber  {{ background: #c97b1a; color: #1a2e44; }}
-    .dp-header.blue   {{ background: #3a6a9a; }}
-    .dp-header.purple {{ background: #6a4a9a; }}
-    .dp-header.slate  {{ background: #4a5a6a; }}
-    .dp-body {{ padding: 0.4rem 0.5rem; }}
-    .dt {{ width: 100%; border-collapse: collapse; font-size: 0.62rem; color: #c8d8c8; font-family: 'DM Sans', sans-serif; }}
-    .dt th {{ color: #6BBF4E; font-weight: 600; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2rem 0.3rem; border-bottom: 1px solid #2a3d2a; }}
-    .dt td {{ padding: 0.18rem 0.3rem; border-bottom: 1px solid #1e2e1e; vertical-align: top; line-height: 1.3; }}
-    .dt tr:last-child td {{ border-bottom: none; }}
-    .dt-em {{ color: #3a4a3a; font-style: italic; font-size: 0.55rem; }}
-    .dp-empty {{ color: #3a4a3a; font-size: 0.6rem; padding: 0.3rem; font-style: italic; font-family: 'DM Sans', sans-serif; }}
-    .vb-time {{ font-family: 'DM Mono', monospace; font-size: 0.58rem; color: #5a7a5a; }}
-    .vb-tag {{ background: #2a4a2a; color: #6BBF4E; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; }}
-    .kitchen-val {{ background: #c97b1a; border-radius: 4px; padding: 0.1rem 0.4rem; color: #1a2e44; font-weight: 800; font-size: 0.65rem; display: inline-block; }}
-    .resp-label {{ font-size: 0.58rem; color: #6BBF4E; font-weight: 600; }}
-    .resp-val {{ font-size: 0.62rem; color: #c8d8c8; }}
-    .fact-bar {{ background: #1e2e1e; border-top: 2px solid #2a3d2a; padding: 0.4rem 1.5rem; font-size: 0.72rem; color: #a8c8a8; display: flex; align-items: center; gap: 0.75rem; font-family: 'DM Sans', sans-serif; }}
-    .fact-label {{ color: #e8a125; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }}
-    .pc-wrap {{ overflow-x: auto; }}
-    .pc-table {{ min-width: 900px; }}
-    .slot {{ text-align: center; font-family: 'DM Mono', monospace; font-size: 0.55rem; }}
-    .slot.filled {{ background: #1e3d1e; color: #6BBF4E; font-weight: 600; }}
-    </style>
-
-    <div class="display-header">
-      <div>
-        <div class="display-header-title">Cowandilla Learning Centre &mdash; Daily Bulletin</div>
-        <div class="display-header-date">{today.strftime("%A %-d %B %Y").upper()}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:1.5rem;">
-        <div class="display-header-time">{now_str}</div>
-        <a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Helper for table rows ──
-    def tbl_rows(rows, keys):
-        filtered = [r for r in rows if any(r.get(k,"") for k in keys)]
-        if not filtered:
-            return '<tr><td colspan="20" class="dt-em">None today</td></tr>'
-        return "".join(["<tr>" + "".join([f"<td>{r.get(k,'')}</td>" for k in keys]) + "</tr>" for r in filtered])
-
-    # ── ROW 1: 5 columns ──
-    r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns([2,2,2.5,1.5,2])
-
-    with r1c1:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header green">🙅 Staff & Student Absent</div><div class="dp-body">
-        <table class="dt"><tr><th>Staff</th><th>TRT</th><th>Student</th><th>Program</th><th>Reason</th></tr>
-        {tbl_rows(d_data.get("staff_absent",[]), ["Staff Absence","TRT","Student Absence","Program","Reason"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r1c2:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header blue">🚌 Excursions</div><div class="dp-body">
-        <table class="dt"><tr><th>Program</th><th>Staff</th><th>Depart</th><th>Return</th><th>Location</th></tr>
-        {tbl_rows(d_data.get("excursions",[]), ["Program","Staff Member","Time Departing","Time Returning","Location"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r1c3:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header navy">🤝 Staff Meetings</div><div class="dp-body">
-        <table class="dt"><tr><th>Type</th><th>Staff</th><th>Location</th><th>Depart</th><th>Return</th><th>Student</th></tr>
-        {tbl_rows(d_data.get("staff_meetings",[]), ["Type","Staff Member","Location","Time Departing","Time Returning","Student"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r1c4:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header brown">📥 Entry Meetings</div><div class="dp-body">
-        <table class="dt"><tr><th>Time</th><th>Program</th><th>Student</th></tr>
-        {tbl_rows(d_data.get("entry_meetings",[]), ["Time","Program","Student"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r1c5:
-        # Staff Responsibilities
-        kitchen = sr.get("kitchen_duties","") or "—"
-        pd_focus = sr.get("meeting_pd_focus","") or "—"
-        chair = sr.get("chair","") or "—"
-        minutes = sr.get("minutes","") or "—"
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header amber">⭐ Staff Responsibilities</div><div class="dp-body">
-        <div style="margin-bottom:0.35rem;"><span class="kitchen-val">🍳 Kitchen: {kitchen}</span></div>
-        <div style="margin-bottom:0.2rem;"><span class="resp-label">📌 PD Focus</span><br><span class="resp-val">{pd_focus}</span></div>
-        <div style="margin-bottom:0.2rem;"><span class="resp-label">🪑 Chair</span><br><span class="resp-val">{chair}</span></div>
-        <div><span class="resp-label">📝 Minutes</span><br><span class="resp-val">{minutes}</span></div>
-        </div></div>
-        """, unsafe_allow_html=True)
-
-    # ── ROW 2: Travel + Vehicle + NIT ──
-    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns([2,2,2,1.5,1])
-
-    with r2c1:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header blue">🟦 JP – Travel</div><div class="dp-body">
-        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
-        {tbl_rows(d_data.get("travel_jp",[]), ["Student","Transport To","Transport From","Times"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r2c2:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header purple">🟣 PY – Travel</div><div class="dp-body">
-        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
-        {tbl_rows(d_data.get("travel_py",[]), ["Student","Transport To","Transport From","Times"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r2c3:
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header slate">🟫 SY – Travel</div><div class="dp-body">
-        <table class="dt"><tr><th>Student</th><th>To</th><th>From</th><th>Times</th></tr>
-        {tbl_rows(d_data.get("travel_sy",[]), ["Student","Transport To","Transport From","Times"])}
-        </table></div></div>
-        """, unsafe_allow_html=True)
-
-    with r2c4:
-        vb = d_data.get("vehicle_bookings", {})
-        times = ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]
-        vb_rows = "".join([
-            f'<tr><td class="vb-time">{t}</td>'
-            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("van","") + "</span>" if vb.get(t,{}).get("van","") else ""}</td>'
-            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("kia","") + "</span>" if vb.get(t,{}).get("kia","") else ""}</td></tr>'
-            for t in times
-        ])
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header navy">🚗 Vehicles</div><div class="dp-body">
-        <table class="dt"><tr><th>Time</th><th>VAN</th><th>KIA</th></tr>{vb_rows}</table>
-        </div></div>
-        """, unsafe_allow_html=True)
-
-    with r2c5:
-        nit = d_data.get("nit_booking","") or '<span class="dp-empty">None today</span>'
-        msgs = d_data.get("additional_messages",[])
-        msg_rows = tbl_rows(msgs, ["Staff Member","Visitor","Reason","Arriving/Departing"])
-        st.markdown(f"""
-        <div class="dp"><div class="dp-header green">📋 NIT Booking</div><div class="dp-body">
-        <p style="font-size:0.62rem;color:#c8d8c8;margin:0;line-height:1.4;">{nit}</p>
-        </div></div>
-        <div class="dp"><div class="dp-header slate">💬 Messages</div><div class="dp-body">
-        <table class="dt"><tr><th>Staff</th><th>Visitor</th><th>Reason</th><th>Arr/Dep</th></tr>{msg_rows}</table>
-        </div></div>
-        """, unsafe_allow_html=True)
-
-    # ── ROW 3: Program Changes (full width) ──
-    pc_rows = d_data.get("program_changes", [])
-    pc_filtered = [r for r in pc_rows if any(r.get(k,"") for k in r)]
-    time_slots = ["9:00-9:30","9:30-10:00","10:00-10:30","10:30-11:00","11:00-11:30",
-                  "11:30-12:00","12:00-12:30","12:30-1:00","1:00-1:30","1:30-2:00","2:00-2:30","2:30-2:45"]
-    pc_headers = "<th>TRT</th><th>CLC Resp.</th><th>Type</th><th>Staff Absent</th><th>JP</th><th>PY</th><th>SY</th><th>NIT</th>" + "".join([f"<th>{s}</th>" for s in time_slots])
-    pc_body = ""
-    if pc_filtered:
-        for r in pc_filtered:
-            cells = "".join([f"<td>{r.get(k,'')}</td>" for k in ["TRT","CLC Responsibility","Type","CLC Staff Absent","JP","PY","SY","NIT"]])
-            cells += "".join([f'<td class="slot {"filled" if r.get(s,"") else ""}">{r.get(s,"")}</td>' for s in time_slots])
-            pc_body += f"<tr>{cells}</tr>"
-    else:
-        pc_body = '<tr><td colspan="20" class="dt-em">No program changes today</td></tr>'
-
-    st.markdown(f"""
-    <div class="dp"><div class="dp-header green">📊 Program Changes</div><div class="dp-body pc-wrap">
-    <table class="dt pc-table"><tr>{pc_headers}</tr>{pc_body}</table>
-    </div></div>
-    """, unsafe_allow_html=True)
-
-    # ── Fun fact footer ──
-    st.markdown(f"""
-    <div class="fact-bar">
-      <span class="fact-label">💡 Fun Fact</span>
-      <span>{fun if fun else "No fun fact entered for today"}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.stop()
