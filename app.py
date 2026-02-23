@@ -499,6 +499,29 @@ page_tab, archive_tab, login_tab = st.tabs(["📋 Bulletin", "🗂️ Archive", 
 # ══════════════════════════════════════════════════════════════
 with page_tab:
 
+    # ── From display: show quick login banner ──
+    if st.query_params.get("from_display") == "true" and not st.session_state.authenticated:
+        st.markdown("""
+        <div style="background:#1a2e44;border-left:4px solid #6BBF4E;padding:0.75rem 1rem;border-radius:0 8px 8px 0;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;">
+          <span style="font-size:1.2rem;">🔐</span>
+          <span style="color:white;font-size:0.85rem;">Enter your staff password below to edit today's bulletin, then save to return to the display screen.</span>
+        </div>
+        """, unsafe_allow_html=True)
+        pw_col, btn_col, back_col = st.columns([2,1,1])
+        with pw_col:
+            quick_pw = st.text_input("Staff Password", type="password", key="quick_pw", label_visibility="collapsed", placeholder="Enter staff password...")
+        with btn_col:
+            if st.button("🔓 Login", type="primary", use_container_width=True):
+                if quick_pw == ADMIN_PASSWORD:
+                    st.session_state.authenticated = True
+                    st.session_state.edit_mode = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password")
+        with back_col:
+            st.markdown('<a href="/?display=true" style="display:block;text-align:center;background:#eef1f4;color:#1a2e44;font-weight:600;font-size:0.85rem;padding:0.5rem;border-radius:8px;text-decoration:none;">↩️ Back to Display</a>', unsafe_allow_html=True)
+        st.markdown("---")
+
     # ── Hero header ──
     week = week_dates(current_date)
     day_pills = ""
@@ -555,6 +578,10 @@ with page_tab:
                     db.save_bulletin(current_date, save_data)
                     st.session_state.edit_mode = False
                     st.success("✅ Bulletin saved!")
+                    # If came from display screen, redirect back
+                    if st.query_params.get("from_display") == "true":
+                        st.markdown('<meta http-equiv="refresh" content="2;url=/?display=true">', unsafe_allow_html=True)
+                        st.info("↩️ Returning to staff room display in 2 seconds...")
                     st.rerun()
 
     st.markdown('<div class="content-area">', unsafe_allow_html=True)
@@ -971,7 +998,10 @@ if params.get("display") == "true":
         <div class="display-header-title">Cowandilla Learning Centre &mdash; Daily Bulletin</div>
         <div class="display-header-date">{today.strftime("%A %-d %B %Y").upper()}</div>
       </div>
-      <div class="display-header-time">{now_str}</div>
+      <div style="display:flex;align-items:center;gap:1.5rem;">
+        <div class="display-header-time">{now_str}</div>
+        <a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
