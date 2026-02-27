@@ -587,7 +587,7 @@ if params.get("display") == "true":
       </div>
       <div style="display:flex;align-items:center;gap:1.5rem;">
         <div class="display-header-time">{now_str}</div>
-        <a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
+        <a href="/?quickadd=true" style="background:rgba(107,191,78,0.2);border:1px solid rgba(107,191,78,0.5);color:#6BBF4E;font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">📝 Quick Add</a><a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -753,6 +753,84 @@ if params.get("display") == "true":
       <span>{fun if fun else "No fun fact entered for today"}</span>
     </div>
     """, unsafe_allow_html=True)
+
+    st.stop()
+
+
+# ══════════════════════════════════════════════════════════════
+# QUICK ADD MODE — Standalone form (no tabs, no login needed)
+# Access via: your-app-url/?quickadd=true
+# ══════════════════════════════════════════════════════════════
+if params.get("quickadd") == "true":
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] { background: #f0f7eb !important; }
+    .main .block-container { padding: 2rem 2rem 3rem !important; max-width: 620px !important; margin: 0 auto !important; }
+    [data-testid="stHeader"] { display: none; }
+    #MainMenu, footer, .stDeployButton { display: none; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#3d7a28,#6BBF4E);border-radius:14px;
+    padding:1.5rem 2rem;margin-bottom:1.5rem;text-align:center;color:white;">
+      <div style="font-size:2rem;margin-bottom:0.3rem;">📝</div>
+      <div style="font-size:1.3rem;font-weight:700;margin-bottom:0.25rem;">Staff Quick Notice</div>
+      <div style="font-size:0.85rem;opacity:0.85;">Cowandilla Learning Centre · Daily Bulletin</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("qa_standalone_form", clear_on_submit=True):
+        qa_name  = st.text_input("Your name *", placeholder="e.g. Sarah")
+        qa_cat   = st.selectbox("Category *", list(NOTICE_CATS.keys()),
+                                format_func=lambda x: f"{NOTICE_CATS[x]['emoji']} {x}")
+        qa_title = st.text_input("Title *", placeholder="e.g. Staff meeting moved to Room 3")
+        qa_body  = st.text_area("Details (optional)", placeholder="Any extra info staff need to know…", height=110)
+        qa_date  = st.date_input("For which day?", value=date.today())
+        qa_ok    = st.form_submit_button("📢 Post Notice to Bulletin", type="primary", use_container_width=True)
+
+        if qa_ok:
+            if not qa_name.strip():
+                st.warning("Please enter your name.")
+            elif not qa_title.strip():
+                st.warning("Please enter a title.")
+            else:
+                save_notice({
+                    "submitted_by": qa_name.strip(),
+                    "category":     qa_cat,
+                    "title":        qa_title.strip(),
+                    "body":         qa_body.strip(),
+                    "notice_date":  str(qa_date),
+                })
+                st.success(f"✅ Notice posted for {qa_date.strftime('%-d %B')}! It's now live on the bulletin.")
+                st.balloons()
+
+    st.markdown("---")
+    st.markdown(
+        '<div style="text-align:center;">'
+        '<a href="/" style="font-size:0.82rem;color:#4a8f33;font-weight:600;text-decoration:none;">← Back to full bulletin</a>'
+        '&nbsp;&nbsp;|&nbsp;&nbsp;'
+        '<a href="/?display=true" style="font-size:0.82rem;color:#4a8f33;font-weight:600;text-decoration:none;">Staff room display →</a>'
+        '</div>',
+        unsafe_allow_html=True)
+
+    # Show today's notices below form
+    qa_today = load_notices(for_date=date.today())
+    if qa_today:
+        st.markdown(f"**Posted today ({date.today().strftime('%-d %B')}):**")
+        for n in qa_today:
+            cat = n.get("category","General")
+            nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
+            st.markdown(
+                f'<div style="background:white;border-radius:10px;border-left:4px solid {nc["color"]};'
+                f'padding:0.7rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.65rem;font-weight:700;'
+                f'text-transform:uppercase;padding:0.15rem 0.5rem;border-radius:20px;">{nc["emoji"]} {cat}</span>'
+                f'<span style="font-size:0.7rem;color:#9ab09a;margin-left:0.5rem;">from {n.get("submitted_by","")}</span>'
+                f'<div style="font-size:0.9rem;font-weight:700;color:#1a2e44;margin:0.3rem 0 0.15rem;">{n.get("title","")}</div>'
+                f'<div style="font-size:0.82rem;color:#3a4a3a;">{n.get("body","") or ""}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
 
     st.stop()
 
