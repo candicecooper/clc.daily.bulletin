@@ -474,6 +474,10 @@ def load_bulletin(d: date):
             if any(monday_sr.get(k, "").strip() for k in resp_keys):
                 data["staff_responsibilities"] = monday_sr
 
+    # ── Auto-fill fun fact if empty ──────────────────────────
+    if not data.get("fun_fact", "").strip():
+        data["fun_fact"] = daily_fun_fact(d)
+
     return data
 
 
@@ -486,6 +490,75 @@ NOTICE_CATS = {
     "Facilities":   {"color": "#6d28d9", "bg": "#ede9fe", "emoji": "🏫"},
     "Wellbeing":    {"color": "#0e7490", "bg": "#cffafe", "emoji": "💚"},
 }
+
+# ── AUSTRALIAN FUN FACTS — one per day, deterministic by date ────────────────
+_AUS_FACTS = [
+    "Australia is the only continent that is also a single country — and somehow still can't decide where to put its capital.",
+    "Kangaroos can't walk backwards, which is why they're on the Australian coat of arms — always moving forward, mate.",
+    "Australia has more kangaroos than people. The roos are winning.",
+    "The Box Jellyfish has 24 eyes. It still can't see why Australians swim anywhere near it.",
+    "A group of kangaroos is called a mob. Very on-brand for Australia.",
+    "Wombats produce cube-shaped poo — the only animal in the world that does. Science still hasn't fully explained why.",
+    "Australia has 10 of the world's 15 most venomous snakes. They're very proud of this.",
+    "The Great Barrier Reef is the largest living structure on Earth — visible from space, yet invisible to politicians.",
+    "Australian Rules Football was invented to keep cricketers fit during winter. Cricket: unintentionally very useful.",
+    "The platypus is venomous, lays eggs, and has a bill like a duck. It looks like Australia designed it after a big night.",
+    "Australians consume more than 1.9 billion Tim Tams per year — roughly 80 per person. This tracks.",
+    "The Sydney Funnel-web Spider is considered the world's most dangerous spider. Sydney has strong opinions about everything.",
+    "Australia once fought a war against emus. The emus won. This is true. Look it up.",
+    "The Dingo Fence is 5,614 km long — built to keep dingoes out of southern Australia. The dingoes are biding their time.",
+    "Eucalyptus leaves are mildly toxic to most animals. Koalas eat almost nothing else and sleep 22 hours a day. Icon behaviour.",
+    "Australia has the longest straight stretch of railway in the world — 478 km of perfectly straight track through the Nullarbor.",
+    "The word 'kangaroo' may come from a Guugu Yimithirr phrase meaning 'I don't understand you' — said to the first Europeans who pointed at one.",
+    "Australia has pink lakes. Lake Hillier on Middle Island is bubblegum pink year-round, and scientists are still arguing about exactly why.",
+    "Canberra was purpose-built as the capital because Sydney and Melbourne couldn't agree on which city deserved it. Classic.",
+    "The Thorny Devil lizard can drink through its feet by standing in water. Useful at a BBQ.",
+    "Australia's first police force was made up of the most well-behaved convicts. Starting as you mean to go on.",
+    "The world's largest cattle station — Anna Creek — is bigger than the entire country of Israel.",
+    "Australians invented WiFi. Also the black box flight recorder. And the bionic ear. But mostly WiFi.",
+    "Drop bears are not real. Probably.",
+    "The laughing kookaburra's call sounds exactly like a human laughing manically. Nobody finds this unsettling.",
+    "Vegemite was invented in Australia in 1922 as a way to use leftover brewer's yeast. You're welcome, or sorry, depending on your position.",
+    "The Murray-Darling river system is so important that an entire government department was created just to argue about it.",
+    "Australians use the word 'reckon' as a sophisticated intellectual agreement mechanism. Fully reckon this is true.",
+    "A baby kangaroo (joey) is about the size of a jellybean when born. It then spends six months in a pouch. Living the dream.",
+    "The Australian dollar is made from polymer plastic, making it waterproof. Essential for a country surrounded by water.",
+    "Australia has the world's largest population of wild camels — over a million. They arrived in the 1800s and clearly decided to stay.",
+    "The Melbourne Cup is a public holiday in Victoria. Only Australians would make a horse race a legitimate reason to stop work.",
+    "Australians call thongs something you wear on your feet. Other countries find this confusing at every BBQ invitation.",
+    "The Australian pelican has the longest bill of any bird in the world. Big bill energy.",
+    "Quokkas are considered the happiest animal on Earth. They live on Rottnest Island. No predators, good weather — honestly same.",
+    "Australian magpies remember human faces and will swoop people they dislike. They hold grudges. Do not underestimate them.",
+    "The Tasmanian Devil's scientific name is Sarcophilus harrisii, meaning 'Harris's meat-lover'. A very honest name.",
+    "Australia's coat of arms features a kangaroo and an emu because neither can walk backwards. Chosen on purpose.",
+    "The first cricket Test match ever played was Australia vs England in 1877. Australia won. England has been processing this since.",
+    "Australians say 'arvo' for afternoon, 'servo' for service station, and 'bottle-o' for bottle shop. The nation abbreviates by default.",
+    "There are more than 10,000 beaches in Australia. Visiting a new one every day would take 27 years. Start planning.",
+    "The bunyip is a mythical creature from Aboriginal folklore said to lurk in swamps. No one has found one. Not ruling it out.",
+    "A mob of emus will methodically destroy a fence to get to crops on the other side. They have a system. They are organised.",
+    "Australia is the driest inhabited continent on Earth, yet Australians insist on planting lawns everywhere. Optimism.",
+    "The Royal Flying Doctor Service covers 7.69 million square kilometres — essentially the world's largest GP practice.",
+    "Uluru extends 2.5 km underground — what you see is only a fraction of the full rock. Like an iceberg, but red and in a desert.",
+    "The cassowary is considered the world's most dangerous bird. It lives in Far North Queensland. Of course it does.",
+    "Australians invented the Hills Hoist rotary clothesline. A genuine contribution to civilisation.",
+    "The Australian Alps receive more snowfall than Switzerland in a good year. Nobody ever believes this.",
+    "A group of wombats is called a wisdom. A group of platypuses is called a paddle. Australian fauna naming is an art.",
+    "South Australia was the first place in the world to give women the right to stand for parliament, back in 1894.",
+    "The echidna and platypus are the only two mammals in the world that lay eggs. Both live in Australia, naturally.",
+    "Australia has more species of lizard than any other country in the world. Over 860. All of them confident.",
+    "Neighbours has been running since 1985, making it one of the longest-running dramas in the world. Erinsborough is eternal.",
+    "The phrase 'no worries' appears in Australian conversation more than any other expression. It is both a greeting and a worldview.",
+    "Tim Tams were named after a horse that won the 1958 Kentucky Derby. An American horse named an Australian biscuit. Culture is weird.",
+    "Australia has a national feral camel management programme. This is a real government job.",
+    "The ACT (Canberra) is the only place in Australia where you can legally own a Segway. Make of that what you will.",
+    "Australia has been ranked one of the world's most liveable countries for decades — largely because we refuse to leave.",
+]
+
+def daily_fun_fact(d):
+    import hashlib
+    seed = int(hashlib.md5(str(d).encode()).hexdigest(), 16)
+    return _AUS_FACTS[seed % len(_AUS_FACTS)]
+
 
 def _get_sb():
     return db.get_supabase()
@@ -1061,7 +1134,22 @@ with page_tab:
     # ─────────────────────────────────────────────────────
     with s1:
         if edit:
-            bulletin_data["fun_fact"] = st.text_input("💡 Fun Fact of the Day", value=bulletin_data.get("fun_fact",""), placeholder="Enter an interesting fact...")
+            auto_fact = daily_fun_fact(current_date)
+            current_fact = bulletin_data.get("fun_fact", "").strip()
+            fc1, fc2 = st.columns([5, 1])
+            with fc1:
+                new_fact = st.text_input(
+                    "💡 Fun Fact of the Day",
+                    value=current_fact if current_fact else auto_fact,
+                    placeholder="Auto-filled with today's Australian fun fact…",
+                )
+            with fc2:
+                st.markdown("<div style='padding-top:1.85rem;'>", unsafe_allow_html=True)
+                if st.button("🎲 New", key="new_fact", help="Replace with today's auto fact", use_container_width=True):
+                    bulletin_data["fun_fact"] = auto_fact
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            bulletin_data["fun_fact"] = new_fact
 
         col_left, col_right = st.columns(2)
 
