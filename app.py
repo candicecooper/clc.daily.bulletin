@@ -985,6 +985,8 @@ with page_tab:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Edit controls ──
+    # NOTE: Save is triggered here but executed AFTER all data editors below have
+    # updated bulletin_data, using a session_state flag to avoid saving stale data.
     if st.session_state.authenticated:
         ctrl_cols = st.columns([1,1,6])
         with ctrl_cols[0]:
@@ -994,15 +996,7 @@ with page_tab:
         with ctrl_cols[1]:
             if edit:
                 if st.button("💾 Save", type="primary", use_container_width=True):
-                    save_data = {k:v for k,v in bulletin_data.items() if k != "id"}
-                    db.save_bulletin(current_date, save_data)
-                    st.session_state.edit_mode = False
-                    st.success("✅ Bulletin saved!")
-                    # If came from display screen, redirect back
-                    if st.query_params.get("from_display") == "true":
-                        st.markdown('<meta http-equiv="refresh" content="2;url=/?display=true">', unsafe_allow_html=True)
-                        st.info("↩️ Returning to staff room display in 2 seconds...")
-                    st.rerun()
+                    st.session_state["_pending_save"] = True
 
     st.markdown('<div class="content-area">', unsafe_allow_html=True)
 
@@ -1279,6 +1273,19 @@ with page_tab:
             st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)  # end content-area
+
+    # ── SAVE EXECUTION — runs here so all data_editors above have already
+    # updated bulletin_data before we write to the database ──────────────
+    if st.session_state.get("_pending_save"):
+        st.session_state["_pending_save"] = False
+        save_data = {k: v for k, v in bulletin_data.items() if k != "id"}
+        db.save_bulletin(current_date, save_data)
+        st.session_state.edit_mode = False
+        st.success("✅ Bulletin saved!")
+        if st.query_params.get("from_display") == "true":
+            st.markdown('<meta http-equiv="refresh" content="2;url=/?display=true">', unsafe_allow_html=True)
+            st.info("↩️ Returning to staff room display in 2 seconds...")
+        st.rerun()
 
 
 
