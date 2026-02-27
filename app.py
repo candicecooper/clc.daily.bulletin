@@ -471,14 +471,7 @@ NOTICE_CATS = {
 }
 
 def _get_sb():
-    try:
-        return db.supabase
-    except AttributeError:
-        try:
-            return db.init_supabase()
-        except Exception:
-            from supabase import create_client
-            return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    return db.get_supabase()
 
 def load_notices(for_date=None):
     try:
