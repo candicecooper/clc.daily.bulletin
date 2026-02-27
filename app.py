@@ -453,10 +453,27 @@ def load_bulletin(d: date):
     data = db.get_bulletin(d)
     defaults = default_bulletin()
     if not data:
-        return defaults
-    for k, v in defaults.items():
-        if k not in data:
-            data[k] = v
+        data = defaults.copy()
+    else:
+        for k, v in defaults.items():
+            if k not in data:
+                data[k] = v
+
+    # ── Weekly carry-forward for staff responsibilities ──────────────
+    # If today's responsibilities are blank, inherit from Monday of the
+    # same week so staff only need to enter them once per week.
+    sr = data.get("staff_responsibilities", {})
+    resp_keys = ["kitchen_duties", "meeting_pd_focus", "chair", "minutes"]
+    is_empty = not any(sr.get(k, "").strip() for k in resp_keys)
+
+    monday = d - timedelta(days=d.weekday())
+    if is_empty and d != monday:
+        monday_data = db.get_bulletin(monday)
+        if monday_data:
+            monday_sr = monday_data.get("staff_responsibilities", {})
+            if any(monday_sr.get(k, "").strip() for k in resp_keys):
+                data["staff_responsibilities"] = monday_sr
+
     return data
 
 
