@@ -460,6 +460,49 @@ def load_bulletin(d: date):
     return data
 
 
+# ── QUICK NOTICE HELPERS ──────────────────────────────────────
+NOTICE_CATS = {
+    "General":      {"color": "#4a8f33", "bg": "#e8f5e1", "emoji": "📢"},
+    "Reminder":     {"color": "#c97b1a", "bg": "#fff3e0", "emoji": "⏰"},
+    "Urgent":       {"color": "#b91c1c", "bg": "#fee2e2", "emoji": "🚨"},
+    "Student Info": {"color": "#1d4ed8", "bg": "#dbeafe", "emoji": "👨‍🎓"},
+    "Facilities":   {"color": "#6d28d9", "bg": "#ede9fe", "emoji": "🏫"},
+    "Wellbeing":    {"color": "#0e7490", "bg": "#cffafe", "emoji": "💚"},
+}
+
+def _get_sb():
+    try:
+        return db.supabase
+    except AttributeError:
+        try:
+            return db.init_supabase()
+        except Exception:
+            from supabase import create_client
+            return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+def load_notices(for_date=None):
+    try:
+        q = _get_sb().table("bulletin_notices").select("*").order("created_at", desc=False)
+        if for_date:
+            q = q.eq("notice_date", str(for_date))
+        return q.execute().data or []
+    except:
+        return []
+
+def save_notice(row):
+    try:
+        _get_sb().table("bulletin_notices").insert(row).execute()
+    except Exception as e:
+        st.error(f"Could not save notice: {e}")
+
+def delete_notice(nid):
+    try:
+        _get_sb().table("bulletin_notices").delete().eq("id", nid).execute()
+    except Exception as e:
+        st.error(f"Could not delete notice: {e}")
+
+
+
 # ══════════════════════════════════════════════════════════════
 # DISPLAY MODE — Staff Room Full-Screen View
 # Access via: your-app-url/?display=true
@@ -687,6 +730,27 @@ if params.get("display") == "true":
     </div></div>
     """, unsafe_allow_html=True)
 
+    # ── Staff Notices row (display mode) ──
+    d_notices = load_notices(for_date=today)
+    if d_notices:
+        n_parts = []
+        for n in d_notices:
+            cat = n.get("category","General")
+            nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
+            n_parts.append(
+                f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.58rem;'
+                f'font-weight:700;text-transform:uppercase;letter-spacing:0.06em;'
+                f'padding:0.1rem 0.4rem;border-radius:10px;">{cat}</span> '
+                f'<strong style="color:#c8d8c8;font-size:0.65rem;">{n.get("title","")}</strong>'
+                f'<span style="color:#8aaa8a;font-size:0.62rem;"> — {n.get("body","")}</span>'
+                f'<span style="color:#4a6a4a;font-size:0.58rem;"> · {n.get("submitted_by","")}</span>'
+            )
+        n_html = "<br>".join(n_parts)
+        st.markdown(
+            f'<div class="dp"><div class="dp-header green">📝 Staff Notices</div>'
+            f'<div class="dp-body"><div style="font-family:DM Sans,sans-serif;line-height:1.8;">{n_html}</div></div></div>',
+            unsafe_allow_html=True)
+
     # ── Fun fact footer ──
     st.markdown(f"""
     <div class="fact-bar">
@@ -731,7 +795,7 @@ bulletin_data = load_bulletin(current_date)
 
 # ── PAGE ROUTING ───────────────────────────────────────────────
 # Top-level tabs
-page_tab, archive_tab, login_tab = st.tabs(["📋 Bulletin", "🗂️ Archive", "🔐 Staff"])
+page_tab, quickadd_tab, archive_tab, login_tab = st.tabs(["📋 Bulletin", "📝 Quick Add", "🗂️ Archive", "🔐 Staff"])
 
 # ══════════════════════════════════════════════════════════════
 # TAB: BULLETIN
@@ -1064,8 +1128,124 @@ with page_tab:
                 st.markdown('<div class="empty-state"><div class="icon">📊</div>No program changes today</div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
 
+        # ── Staff Notices card ──
+        b_notices = load_notices(for_date=current_date)
+        if b_notices or edit:
+            st.markdown('<div class="section-card"><div class="section-card-header green"><h3>📝 Staff Notices</h3></div><div class="section-card-body">', unsafe_allow_html=True)
+            if b_notices:
+                for n in b_notices:
+                    cat = n.get("category","General")
+                    nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
+                    nid = n.get("id","")
+                    nc1, nc2 = st.columns([9,1])
+                    with nc1:
+                        st.markdown(
+                            f'<div style="background:white;border-radius:10px;border-left:4px solid {nc["color"]};'
+                            f'padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                            f'<div style="margin-bottom:0.2rem;">'
+                            f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.65rem;'
+                            f'font-weight:700;text-transform:uppercase;letter-spacing:0.08em;'
+                            f'padding:0.15rem 0.5rem;border-radius:20px;">{nc["emoji"]} {cat}</span>'
+                            f'<span style="font-size:0.7rem;color:#9ab09a;margin-left:0.5rem;">from {n.get("submitted_by","")}</span>'
+                            f'</div>'
+                            f'<div style="font-size:0.9rem;font-weight:700;color:#1a2e44;margin:0.3rem 0 0.2rem;">{n.get("title","")}</div>'
+                            f'<div style="font-size:0.82rem;color:#3a4a3a;line-height:1.5;">{n.get("body","")}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True)
+                    with nc2:
+                        if edit:
+                            st.write("")
+                            if st.button("🗑️", key=f"del_n_{nid}", help="Delete notice"):
+                                delete_notice(nid); st.rerun()
+            else:
+                st.markdown('<div style="text-align:center;padding:1.5rem;color:#9ab09a;font-size:0.85rem;">No notices today — staff can add via the 📝 Quick Add tab</div>', unsafe_allow_html=True)
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)  # end content-area
 
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB: QUICK ADD
+# ══════════════════════════════════════════════════════════════
+with quickadd_tab:
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#3d7a28,#6BBF4E);border-radius:14px;
+    padding:1.5rem 2rem;margin-bottom:1.5rem;color:white;">
+      <div style="font-size:1.3rem;font-weight:700;margin-bottom:0.3rem;">📝 Add a Staff Notice</div>
+      <div style="font-size:0.85rem;opacity:0.85;">No password needed. Your notice will appear on today's bulletin
+      and the staff room display screen straight away.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    qa_col, preview_col = st.columns([1, 1])
+
+    with qa_col:
+        with st.form("quick_add_form", clear_on_submit=True):
+            qa_name = st.text_input("Your name *", placeholder="e.g. Sarah")
+            qa_cat  = st.selectbox("Category *", list(NOTICE_CATS.keys()))
+            qa_title = st.text_input("Title *", placeholder="e.g. Staff meeting moved to Room 3")
+            qa_body  = st.text_area("Details", placeholder="Any additional info… (optional)", height=120)
+            qa_date  = st.date_input("For which day?", value=date.today())
+            qa_ok    = st.form_submit_button("📢 Post Notice", type="primary", use_container_width=True)
+            if qa_ok:
+                if not qa_name.strip():
+                    st.warning("Please enter your name.")
+                elif not qa_title.strip():
+                    st.warning("Please enter a title.")
+                else:
+                    save_notice({
+                        "submitted_by": qa_name.strip(),
+                        "category":     qa_cat,
+                        "title":        qa_title.strip(),
+                        "body":         qa_body.strip(),
+                        "notice_date":  str(qa_date),
+                    })
+                    st.success(f"✅ Notice posted for {qa_date.strftime('%-d %B')}! It's now live on the bulletin.")
+                    st.balloons()
+
+    with preview_col:
+        st.markdown("**Category guide:**")
+        for cat, cfg in NOTICE_CATS.items():
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">'
+                f'<span style="background:{cfg["bg"]};color:{cfg["color"]};font-size:0.72rem;'
+                f'font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;min-width:90px;'
+                f'text-align:center;">{cfg["emoji"]} {cat}</span>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+    # ── Today's notices listed below ──
+    st.markdown("---")
+    st.markdown(f"**Notices posted for {date.today().strftime('%A %-d %B')}:**")
+    listed = load_notices(for_date=date.today())
+    if not listed:
+        st.markdown('<div style="text-align:center;padding:2rem;color:#9ab09a;font-size:0.85rem;">No notices yet today — be the first!</div>', unsafe_allow_html=True)
+    else:
+        for n in listed:
+            cat = n.get("category","General")
+            nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
+            nid = n.get("id","")
+            nl1, nl2 = st.columns([9,1])
+            with nl1:
+                st.markdown(
+                    f'<div style="background:white;border-radius:10px;border-left:4px solid {nc["color"]};'
+                    f'padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                    f'<div style="margin-bottom:0.2rem;">'
+                    f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.65rem;'
+                    f'font-weight:700;text-transform:uppercase;letter-spacing:0.08em;'
+                    f'padding:0.15rem 0.5rem;border-radius:20px;">{nc["emoji"]} {cat}</span>'
+                    f'<span style="font-size:0.7rem;color:#9ab09a;margin-left:0.5rem;">from {n.get("submitted_by","")}</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.9rem;font-weight:700;color:#1a2e44;margin:0.3rem 0 0.2rem;">{n.get("title","")}</div>'
+                    f'<div style="font-size:0.82rem;color:#3a4a3a;line-height:1.5;">{n.get("body","") or ""}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+            with nl2:
+                st.write("")
+                if st.session_state.authenticated:
+                    if st.button("🗑️", key=f"qa_del_{nid}", help="Delete"):
+                        delete_notice(nid); st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # TAB: ARCHIVE
