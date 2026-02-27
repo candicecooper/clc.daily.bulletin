@@ -1133,7 +1133,7 @@ with page_tab:
         render_travel_card(sy_col, "travel_sy", "🟫 Senior Years – Travel", "#8c6a4f")
 
         # Vehicle bookings
-        st.markdown('<div class="section-card"><div class="section-card-header navy"><h3>🚗 Vehicle Room Booking</h3></div><div class="section-card-body">', unsafe_allow_html=True)
+        st.markdown('<div class="section-card"><div class="section-card-header navy"><h3>🚗 Vehicle Bookings — Van & Kia</h3></div><div class="section-card-body">', unsafe_allow_html=True)
         times = ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]
         vb = bulletin_data["vehicle_bookings"]
 
