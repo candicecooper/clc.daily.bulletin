@@ -524,8 +524,11 @@ def delete_notice(nid):
 params = st.query_params
 if params.get("display") == "true":
 
-    # Load today's bulletin
-    today = date.today()
+    # Date selection — session state, then today
+    if "display_date" not in st.session_state:
+        st.session_state.display_date = date.today()
+
+    today = st.session_state.display_date
     d_data = load_bulletin(today)
 
     st.markdown("""
@@ -607,6 +610,29 @@ if params.get("display") == "true":
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Day navigation (display mode) ──
+    prev_day = today - timedelta(days=1)
+    next_day = today + timedelta(days=1)
+    dn_prev, dn_label, dn_next, dn_today = st.columns([1, 4, 1, 1])
+    with dn_prev:
+        if st.button(f"← {prev_day.strftime('%a %-d %b')}", key="dn_prev", use_container_width=True):
+            st.session_state.display_date = prev_day
+            st.rerun()
+    with dn_label:
+        st.markdown(
+            f'<div style="text-align:center;color:#6BBF4E;font-size:0.75rem;font-weight:700;'
+            f'font-family:DM Mono,monospace;letter-spacing:0.08em;padding:0.45rem 0;">'
+            f'VIEWING: {today.strftime("%A %-d %B %Y").upper()}</div>',
+            unsafe_allow_html=True)
+    with dn_next:
+        if st.button(f"{next_day.strftime('%a %-d %b')} →", key="dn_next", use_container_width=True):
+            st.session_state.display_date = next_day
+            st.rerun()
+    with dn_today:
+        if st.button("Today", key="dn_today", use_container_width=True):
+            st.session_state.display_date = date.today()
+            st.rerun()
 
     # ── Helper for table rows ──
     def tbl_rows(rows, keys):
@@ -762,23 +788,23 @@ if params.get("display") == "true":
             f'<div class="dp-body"><div style="font-family:DM Sans,sans-serif;line-height:1.8;">{n_html}</div></div></div>',
             unsafe_allow_html=True)
 
-    # ── Live clock JS (Adelaide time) ──
-    st.markdown("""
+    # ── Live clock JS (Adelaide time) — must use components to run JS ──
+    import streamlit.components.v1 as components
+    components.html("""
     <script>
     (function() {
       function updateClock() {
-        var now = new Date();
-        // Format in Adelaide timezone
         var opts = { timeZone: 'Australia/Adelaide', hour: 'numeric', minute: '2-digit', hour12: true };
-        var timeStr = now.toLocaleTimeString('en-AU', opts).toUpperCase();
-        var el = document.getElementById('live-clock');
+        var timeStr = new Date().toLocaleTimeString('en-AU', opts).toUpperCase();
+        // Walk up to parent frames to find the element
+        var el = window.parent.document.getElementById('live-clock');
         if (el) el.textContent = timeStr;
       }
       updateClock();
       setInterval(updateClock, 1000);
     })();
     </script>
-    """, unsafe_allow_html=True)
+    """, height=0)
 
     # ── Fun fact footer ──
     st.markdown(f"""
