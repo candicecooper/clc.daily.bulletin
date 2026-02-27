@@ -538,7 +538,6 @@ if params.get("display") == "true":
     # ── Header banner ──
     sr = d_data.get("staff_responsibilities", {})
     fun = d_data.get("fun_fact", "")
-    now_str = datetime.now().strftime("%I:%M %p")
 
     st.markdown(f"""
     <style>
@@ -586,7 +585,7 @@ if params.get("display") == "true":
         <div class="display-header-date">{today.strftime("%A %-d %B %Y").upper()}</div>
       </div>
       <div style="display:flex;align-items:center;gap:1.5rem;">
-        <div class="display-header-time">{now_str}</div>
+        <div class="display-header-time" id="live-clock">--:-- --</div>
         <a href="/?quickadd=true" style="background:rgba(107,191,78,0.2);border:1px solid rgba(107,191,78,0.5);color:#6BBF4E;font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">📝 Quick Add</a><a href="/?from_display=true" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.55);font-family:'DM Sans',sans-serif;font-size:0.68rem;font-weight:600;padding:0.3rem 0.85rem;border-radius:6px;text-decoration:none;letter-spacing:0.05em;">✏️ Staff Access</a>
       </div>
     </div>
@@ -745,6 +744,24 @@ if params.get("display") == "true":
             f'<div class="dp"><div class="dp-header green">📝 Staff Notices</div>'
             f'<div class="dp-body"><div style="font-family:DM Sans,sans-serif;line-height:1.8;">{n_html}</div></div></div>',
             unsafe_allow_html=True)
+
+    # ── Live clock JS (Adelaide time) ──
+    st.markdown("""
+    <script>
+    (function() {
+      function updateClock() {
+        var now = new Date();
+        // Format in Adelaide timezone
+        var opts = { timeZone: 'Australia/Adelaide', hour: 'numeric', minute: '2-digit', hour12: true };
+        var timeStr = now.toLocaleTimeString('en-AU', opts).toUpperCase();
+        var el = document.getElementById('live-clock');
+        if (el) el.textContent = timeStr;
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+    })();
+    </script>
+    """, unsafe_allow_html=True)
 
     # ── Fun fact footer ──
     st.markdown(f"""
@@ -928,14 +945,41 @@ with page_tab:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Week day selector ──
-    st.markdown('<div style="background:white;border-bottom:2px solid #e8f0e3;padding:0 1rem;">', unsafe_allow_html=True)
+    # ── Week day selector with week navigation ──
+    st.markdown('<div style="background:white;border-bottom:2px solid #e8f0e3;padding:0.4rem 1rem 0;">', unsafe_allow_html=True)
+
+    # Week navigation row
+    nav_left, nav_mid, nav_right = st.columns([1, 4, 1])
+    with nav_left:
+        prev_monday = week[0] - timedelta(days=7)
+        if st.button("← Prev Week", key="prev_week", use_container_width=True):
+            st.session_state.selected_date = prev_monday
+            st.rerun()
+    with nav_mid:
+        week_label_str = f"Week of {week[0].strftime('%-d %b')} – {week[-1].strftime('%-d %b %Y')}"
+        is_this_week = date.today() in week
+        if is_this_week:
+            week_label_str += " · This Week"
+        st.markdown(
+            f'<div style="text-align:center;padding:0.45rem 0;font-size:0.78rem;font-weight:600;'
+            f'color:{"#4a8f33" if is_this_week else "#5a6e5a"};">{week_label_str}</div>',
+            unsafe_allow_html=True,
+        )
+    with nav_right:
+        next_monday = week[0] + timedelta(days=7)
+        if st.button("Next Week →", key="next_week", use_container_width=True):
+            st.session_state.selected_date = next_monday
+            st.rerun()
+
+    # Day buttons
     day_cols = st.columns(5)
     for i, d in enumerate(week):
         with day_cols[i]:
             is_current = d == current_date
+            is_today   = d == date.today()
+            label = d.strftime("%a %-d %b") + (" ◉" if is_today else "")
             btn_type = "primary" if is_current else "secondary"
-            if st.button(d.strftime("%a %-d %b"), key=f"day_{d}", use_container_width=True, type=btn_type):
+            if st.button(label, key=f"day_{d}", use_container_width=True, type=btn_type):
                 st.session_state.selected_date = d
                 st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
