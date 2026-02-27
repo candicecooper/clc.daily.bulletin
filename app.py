@@ -987,8 +987,8 @@ with page_tab:
     # ── Edit controls ──
     # NOTE: Save is triggered here but executed AFTER all data editors below have
     # updated bulletin_data, using a session_state flag to avoid saving stale data.
+    ctrl_cols = st.columns([1, 1, 4, 1])
     if st.session_state.authenticated:
-        ctrl_cols = st.columns([1,1,6])
         with ctrl_cols[0]:
             if st.button("✏️ Edit" if not edit else "👁️ View", type="primary" if not edit else "secondary", use_container_width=True):
                 st.session_state.edit_mode = not st.session_state.edit_mode
@@ -997,6 +997,14 @@ with page_tab:
             if edit:
                 if st.button("💾 Save", type="primary", use_container_width=True):
                     st.session_state["_pending_save"] = True
+    with ctrl_cols[3]:
+        st.markdown(
+            '<a href="/?display=true" target="_blank" style="display:block;text-align:center;'
+            'background:#1a2e44;color:white;font-weight:600;font-size:0.8rem;'
+            'padding:0.45rem 0.75rem;border-radius:8px;text-decoration:none;white-space:nowrap;">'
+            '📺 Staff Room View</a>',
+            unsafe_allow_html=True
+        )
 
     st.markdown('<div class="content-area">', unsafe_allow_html=True)
 
