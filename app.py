@@ -1214,8 +1214,6 @@ with quickadd_tab:
     st.markdown("---")
     st.markdown(f"**Notices posted for {date.today().strftime('%A %-d %B')}:**")
     listed = load_notices(for_date=date.today())
-    # DEBUG — remove after confirming notices work
-    st.info(f"🔍 Debug: today={date.today()}, notices found={len(listed)}, raw={listed[:1] if listed else 'empty'}")
     if not listed:
         st.markdown('<div style="text-align:center;padding:2rem;color:#9ab09a;font-size:0.85rem;">No notices yet today — be the first!</div>', unsafe_allow_html=True)
     else:
