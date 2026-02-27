@@ -478,8 +478,10 @@ def load_notices(for_date=None):
         q = _get_sb().table("bulletin_notices").select("*").order("created_at", desc=False)
         if for_date:
             q = q.eq("notice_date", str(for_date))
-        return q.execute().data or []
-    except:
+        result = q.execute()
+        return result.data or []
+    except Exception as e:
+        st.warning(f"⚠️ Could not load notices: {e}")
         return []
 
 def save_notice(row):
@@ -1212,6 +1214,8 @@ with quickadd_tab:
     st.markdown("---")
     st.markdown(f"**Notices posted for {date.today().strftime('%A %-d %B')}:**")
     listed = load_notices(for_date=date.today())
+    # DEBUG — remove after confirming notices work
+    st.info(f"🔍 Debug: today={date.today()}, notices found={len(listed)}, raw={listed[:1] if listed else 'empty'}")
     if not listed:
         st.markdown('<div style="text-align:center;padding:2rem;color:#9ab09a;font-size:0.85rem;">No notices yet today — be the first!</div>', unsafe_allow_html=True)
     else:
