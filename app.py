@@ -1053,13 +1053,21 @@ with page_tab:
         day_pills += f'<span class="day-pill {active} {today_cls}" data-date="{d}">{d.strftime("%a %-d %b")}</span>'
 
     fun_fact_html = ""
+    import html as _html
     fact = bulletin_data.get("fun_fact","")
-    if fact:
-        fun_fact_html = f"""
-        <div class="fun-fact-pill">
-          <div class="fun-fact-label">💡 Fun Fact</div>
-          <div class="fun-fact-text">{fact}</div>
-        </div>"""
+    # Strip any accidentally stored HTML tags and re-escape for safe display
+    import re as _re
+    fact_clean = _html.escape(_re.sub(r'<[^>]+>', '', fact)).strip()
+    if fact_clean:
+        fun_fact_html = (
+            '<div style="background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);'
+            'border:1px solid rgba(255,255,255,0.2);border-radius:12px;'
+            'padding:0.65rem 1rem;max-width:480px;">'
+            '<div style="font-size:0.65rem;color:rgba(255,255,255,0.6);'
+            'letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.2rem;">💡 Fun Fact</div>'
+            f'<div style="font-size:0.85rem;color:white;font-weight:500;line-height:1.4;">{fact_clean}</div>'
+            '</div>'
+        )
 
     st.markdown(f"""
     <div class="bulletin-hero">
