@@ -398,13 +398,23 @@ label[data-testid="stWidgetLabel"] p {
 """, unsafe_allow_html=True)
 
 # ── SESSION STATE ─────────────────────────────────────────────
+def _default_date():
+    """Return today's date, but skip weekends — Sat → Fri, Sun → Mon."""
+    d = date.today()
+    if d.weekday() == 5:   # Saturday → Friday
+        return d - timedelta(days=1)
+    if d.weekday() == 6:   # Sunday → Monday
+        return d + timedelta(days=1)
+    return d
+
 def init_state():
     defaults = {
         "authenticated": False,
         "edit_mode": False,
-        "selected_date": date.today(),
+        "selected_date": _default_date(),
         "page": "bulletin",
         "show_login": False,
+        "show_inline_login": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -474,7 +484,10 @@ def load_bulletin(d: date):
             if any(monday_sr.get(k, "").strip() for k in resp_keys):
                 data["staff_responsibilities"] = monday_sr
 
-    # ── Auto-fill fun fact if empty ──────────────────────────
+    # ── Auto-fill fun fact if empty — always override blank saved values ──
+    if not data.get("fun_fact", "").strip():
+        data["fun_fact"] = daily_fun_fact(d)
+    # Also ensure display mode always gets a fact
     if not data.get("fun_fact", "").strip():
         data["fun_fact"] = daily_fun_fact(d)
 
@@ -1101,19 +1114,29 @@ with page_tab:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── Edit controls ──
-    # NOTE: Save is triggered here but executed AFTER all data editors below have
-    # updated bulletin_data, using a session_state flag to avoid saving stale data.
-    ctrl_cols = st.columns([1, 1, 4, 1])
+    ctrl_cols = st.columns([1, 1, 1, 3, 1])
     if st.session_state.authenticated:
         with ctrl_cols[0]:
             if st.button("✏️ Edit" if not edit else "👁️ View", type="primary" if not edit else "secondary", use_container_width=True):
                 st.session_state.edit_mode = not st.session_state.edit_mode
+                st.session_state.show_inline_login = False
                 st.rerun()
         with ctrl_cols[1]:
             if edit:
                 if st.button("💾 Save", type="primary", use_container_width=True):
                     st.session_state["_pending_save"] = True
-    with ctrl_cols[3]:
+        with ctrl_cols[2]:
+            if st.button("🚪 Logout", type="secondary", use_container_width=True):
+                st.session_state.authenticated = False
+                st.session_state.edit_mode = False
+                st.rerun()
+    else:
+        with ctrl_cols[0]:
+            if st.button("🔐 Staff Login", type="secondary", use_container_width=True):
+                st.session_state.show_inline_login = not st.session_state.get("show_inline_login", False)
+                st.rerun()
+
+    with ctrl_cols[4]:
         st.markdown(
             '<a href="/?display=true" target="_blank" style="display:block;text-align:center;'
             'background:#1a2e44;color:white;font-weight:600;font-size:0.8rem;'
@@ -1121,6 +1144,28 @@ with page_tab:
             '📺 Staff Room View</a>',
             unsafe_allow_html=True
         )
+
+    # ── Inline login panel ──
+    if not st.session_state.authenticated and st.session_state.get("show_inline_login", False):
+        with st.container():
+            st.markdown('<div style="background:#f0f7eb;border:1.5px solid #6BBF4E;border-radius:10px;padding:1rem 1.25rem;margin:0.5rem 0 0.75rem;">', unsafe_allow_html=True)
+            lc1, lc2, lc3 = st.columns([3, 1, 1])
+            with lc1:
+                quick_pw = st.text_input("Staff password", type="password", key="inline_pw", label_visibility="collapsed", placeholder="Enter staff password…")
+            with lc2:
+                if st.button("🔓 Login", type="primary", use_container_width=True, key="inline_login_btn"):
+                    if quick_pw == ADMIN_PASSWORD:
+                        st.session_state.authenticated = True
+                        st.session_state.edit_mode = True
+                        st.session_state.show_inline_login = False
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password")
+            with lc3:
+                if st.button("Cancel", type="secondary", use_container_width=True, key="inline_cancel"):
+                    st.session_state.show_inline_login = False
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="content-area">', unsafe_allow_html=True)
 
@@ -1159,7 +1204,7 @@ with page_tab:
             if edit:
                 import pandas as pd
                 df = pd.DataFrame(bulletin_data["staff_absent"])
-                edited = st.data_editor(df, key="sa_editor", hide_index=True, use_container_width=True,
+                edited = st.data_editor(df, key="sa_editor", hide_index=True, use_container_width=True, num_rows="dynamic",
                     column_config={c: st.column_config.TextColumn(c) for c in df.columns})
                 bulletin_data["staff_absent"] = edited.to_dict("records")
             else:
@@ -1177,7 +1222,7 @@ with page_tab:
             st.markdown('<div class="section-card"><div class="section-card-header blue"><h3>🚌 Excursions</h3></div><div class="section-card-body">', unsafe_allow_html=True)
             if edit:
                 df = pd.DataFrame(bulletin_data["excursions"])
-                edited = st.data_editor(df, key="ex_editor", hide_index=True, use_container_width=True)
+                edited = st.data_editor(df, key="ex_editor", hide_index=True, use_container_width=True, num_rows="dynamic")
                 bulletin_data["excursions"] = edited.to_dict("records")
             else:
                 rows = bulletin_data["excursions"]
@@ -1194,7 +1239,7 @@ with page_tab:
             st.markdown('<div class="section-card"><div class="section-card-header brown"><h3>📥 Entry Meetings – Annette</h3></div><div class="section-card-body">', unsafe_allow_html=True)
             if edit:
                 df = pd.DataFrame(bulletin_data["entry_meetings"])
-                edited = st.data_editor(df, key="em_editor", hide_index=True, use_container_width=True)
+                edited = st.data_editor(df, key="em_editor", hide_index=True, use_container_width=True, num_rows="dynamic")
                 bulletin_data["entry_meetings"] = edited.to_dict("records")
             else:
                 rows = bulletin_data["entry_meetings"]
@@ -1212,7 +1257,7 @@ with page_tab:
             st.markdown('<div class="section-card"><div class="section-card-header navy"><h3>🤝 Staff Meetings</h3></div><div class="section-card-body">', unsafe_allow_html=True)
             if edit:
                 df = pd.DataFrame(bulletin_data["staff_meetings"])
-                edited = st.data_editor(df, key="sm_editor", hide_index=True, use_container_width=True)
+                edited = st.data_editor(df, key="sm_editor", hide_index=True, use_container_width=True, num_rows="dynamic")
                 bulletin_data["staff_meetings"] = edited.to_dict("records")
             else:
                 rows = bulletin_data["staff_meetings"]
@@ -1229,7 +1274,7 @@ with page_tab:
             st.markdown('<div class="section-card"><div class="section-card-header slate"><h3>💬 Additional Staff Messages</h3></div><div class="section-card-body">', unsafe_allow_html=True)
             if edit:
                 df = pd.DataFrame(bulletin_data["additional_messages"])
-                edited = st.data_editor(df, key="msg_editor", hide_index=True, use_container_width=True)
+                edited = st.data_editor(df, key="msg_editor", hide_index=True, use_container_width=True, num_rows="dynamic")
                 bulletin_data["additional_messages"] = edited.to_dict("records")
             else:
                 rows = bulletin_data["additional_messages"]
@@ -1255,7 +1300,7 @@ with page_tab:
                 rows = bulletin_data[key]
                 if edit:
                     df = pd.DataFrame(rows)
-                    edited = st.data_editor(df, key=f"{key}_editor", hide_index=True, use_container_width=True)
+                    edited = st.data_editor(df, key=f"{key}_editor", hide_index=True, use_container_width=True, num_rows="dynamic")
                     bulletin_data[key] = edited.to_dict("records")
                 else:
                     has_data = any(any(v for v in r.values()) for r in rows)
@@ -1353,7 +1398,7 @@ with page_tab:
         df = pd.DataFrame(pc_rows)
 
         if edit:
-            edited = st.data_editor(df, key="pc_editor", hide_index=True, use_container_width=True,
+            edited = st.data_editor(df, key="pc_editor", hide_index=True, use_container_width=True, num_rows="dynamic",
                 column_config={"Type": st.column_config.SelectboxColumn("Type",
                     options=["","Lunch break","NIT change","Addition NIT","Program Teacher"])})
             bulletin_data["program_changes"] = edited.to_dict("records")
