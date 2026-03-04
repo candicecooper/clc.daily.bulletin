@@ -447,16 +447,10 @@ def default_bulletin():
         "travel_jp": [{"Student":"","Transport To":"","Transport From":"","Times":""} for _ in range(5)],
         "travel_py": [{"Student":"","Transport To":"","Transport From":"","Times":""} for _ in range(5)],
         "travel_sy": [{"Student":"","Transport To":"","Transport From":"","Times":""} for _ in range(5)],
-        "vehicle_bookings": {t:{"van":"","kia":""} for t in ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]},
+        "vehicle_bookings": [],
         "staff_responsibilities": {"kitchen_duties":"","meeting_pd_focus":"","chair":"","minutes":""},
         "nit_booking": "",
-        "program_changes": [{
-            "TRT":"","CLC Responsibility":"","Type":"","CLC Staff Absent":"",
-            "JP":"","PY":"","SY":"","NIT":"",
-            "9:00-9:30":"","9:30-10:00":"","10:00-10:30":"","10:30-11:00":"",
-            "11:00-11:30":"","11:30-12:00":"","12:00-12:30":"","12:30-1:00":"",
-            "1:00-1:30":"","1:30-2:00":"","2:00-2:30":"","2:30-2:45":""
-        } for _ in range(5)]
+        "program_changes": [_empty_pc() for _ in range(3)]
     }
 
 def load_bulletin(d: date):
@@ -468,6 +462,23 @@ def load_bulletin(d: date):
         for k, v in defaults.items():
             if k not in data:
                 data[k] = v
+
+    # ── Backward compat — old vehicle_bookings format (dict → list) ────────
+    vb = data.get("vehicle_bookings", [])
+    if isinstance(vb, dict):
+        # Old format: {time: {van, kia}} — convert to list of booking dicts
+        converted = []
+        for t, v in vb.items():
+            if v.get("van",""):
+                converted.append({"vehicle":"Van","booker":v["van"],"whole_day":True,"start_time":"","end_time":""})
+            if v.get("kia",""):
+                converted.append({"vehicle":"Kia","booker":v["kia"],"whole_day":True,"start_time":"","end_time":""})
+        data["vehicle_bookings"] = converted
+
+    # ── Backward compat — old program_changes format (list of old-key dicts) ─
+    pc = data.get("program_changes", [])
+    if pc and isinstance(pc[0], dict) and "change_reason" not in pc[0]:
+        data["program_changes"] = [_empty_pc() for _ in range(3)]
 
     # ── Weekly carry-forward for staff responsibilities ──────────────
     # If today's responsibilities are blank, inherit from Monday of the
@@ -503,6 +514,90 @@ NOTICE_CATS = {
     "Facilities":   {"color": "#6d28d9", "bg": "#ede9fe", "emoji": "🏫"},
     "Wellbeing":    {"color": "#0e7490", "bg": "#cffafe", "emoji": "💚"},
 }
+
+# ── CLC STAFF LIST (edit this list to match your actual staff) ──────────────
+CLC_STAFF = [
+    "— Select staff member —",
+    "Admin",
+    "Teacher A",
+    "Teacher B",
+    "Teacher C",
+    "SSO 1",
+    "SSO 2",
+    "SSO 3",
+]
+
+# ── PROGRAM CHANGES — 15-min time slots & options ───────────────────────────
+PC_TIME_SLOTS = [
+    "9:00","9:15","9:30","9:45",
+    "10:00","10:15","10:30","10:45",
+    "11:00","11:15","11:30","11:45",
+    "12:00","12:15","12:30","12:45",
+    "1:00","1:15","1:30","1:45",
+    "2:00","2:15","2:30","2:45",
+]
+PC_SLOT_OPTIONS = ["", "JP", "PY", "SY", "Lunch Cover", "Lunch Break", "NIT", "Other"]
+
+def _empty_pc():
+    return {
+        "change_reason": "",  # "Staff Absence" | "Site Need"
+        "staff_absent": "",
+        "trt": False,
+        "trt_name": "",
+        "covering": "",       # "Program" | "NIT"
+        "program": "",        # "JP" | "PY" | "SY"
+        "staff_member": "",   # Site Need / no TRT
+        "release_type": "",   # release type for site need
+        "time_slots": {},     # {slot: {"value":"JP","person":""}}
+    }
+
+def _pc_timetable_html(entry, dark=False):
+    """Render a program change timetable as an HTML table."""
+    ts = entry.get("time_slots", {})
+    if not ts or not any(
+        (v.get("value","") if isinstance(v,dict) else v)
+        for v in ts.values()
+    ):
+        return ""
+
+    lc_bg  = ("#fff3cd" if not dark else "#4a3200")   # Lunch Cover  — amber
+    lb_bg  = ("#cce5ff" if not dark else "#002a4a")   # Lunch Break  — blue
+    ok_bg  = ("#e8f5e1" if not dark else "#1e3d1e")   # Normal       — green
+    text   = ("#2d4a2d" if not dark else "#c8d8c8")
+    hdr    = ("#4a6640" if not dark else "#6BBF4E")
+    th_bg  = ("#f4f8f2" if not dark else "#111e11")
+    fs     = "0.58rem" if dark else "0.68rem"
+
+    headers = "".join([
+        f'<th style="background:{th_bg};color:{hdr};font-size:0.55rem;'
+        f'padding:2px 4px;text-align:center;white-space:nowrap;">{s}</th>'
+        for s in PC_TIME_SLOTS
+    ])
+    cells = ""
+    for slot in PC_TIME_SLOTS:
+        raw = ts.get(slot, {})
+        val    = raw.get("value","")  if isinstance(raw,dict) else raw
+        person = raw.get("person","") if isinstance(raw,dict) else ""
+        if val == "Lunch Cover":
+            bg = lc_bg
+        elif val == "Lunch Break":
+            bg = lb_bg
+        elif val:
+            bg = ok_bg
+        else:
+            bg = "transparent"
+        inner = f"<strong>{val}</strong>"
+        if person:
+            inner += f"<br><span style='font-size:0.9em;opacity:0.75;'>{person}</span>"
+        cells += (
+            f'<td style="background:{bg};color:{text};text-align:center;'
+            f'padding:2px 3px;font-size:{fs};min-width:36px;vertical-align:top;">'
+            f'{inner}</td>'
+        )
+    return (
+        f'<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;">'
+        f'<tr>{headers}</tr><tr>{cells}</tr></table></div>'
+    )
 
 # ── AUSTRALIAN FUN FACTS — one per day, deterministic by date ────────────────
 _AUS_FACTS = [
@@ -727,6 +822,27 @@ if params.get("display") == "true":
             return '<tr><td colspan="20" class="dt-em">None today</td></tr>'
         return "".join(["<tr>" + "".join([f"<td>{r.get(k,'')}</td>" for k in keys]) + "</tr>" for r in filtered])
 
+    # ── Staff Notices — FIRST on display ──
+    d_notices = load_notices(for_date=today)
+    if d_notices:
+        n_parts = []
+        for n in d_notices:
+            cat = n.get("category","General")
+            nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
+            n_parts.append(
+                f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.58rem;'
+                f'font-weight:700;text-transform:uppercase;letter-spacing:0.06em;'
+                f'padding:0.1rem 0.4rem;border-radius:10px;">{cat}</span> '
+                f'<strong style="color:#c8d8c8;font-size:0.65rem;">{n.get("title","")}</strong>'
+                f'<span style="color:#8aaa8a;font-size:0.62rem;"> — {n.get("body","")}</span>'
+                f'<span style="color:#4a6a4a;font-size:0.58rem;"> · {n.get("submitted_by","")}</span>'
+            )
+        n_html = "<br>".join(n_parts)
+        st.markdown(
+            f'<div class="dp"><div class="dp-header green">📝 Staff Notices</div>'
+            f'<div class="dp-body"><div style="font-family:DM Sans,sans-serif;line-height:1.8;">{n_html}</div></div></div>',
+            unsafe_allow_html=True)
+
     # ── ROW 1: 5 columns ──
     r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns([2,2,2.5,1.5,2])
 
@@ -805,17 +921,30 @@ if params.get("display") == "true":
         """, unsafe_allow_html=True)
 
     with r2c4:
-        vb = d_data.get("vehicle_bookings", {})
-        times = ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]
-        vb_rows = "".join([
-            f'<tr><td class="vb-time">{t}</td>'
-            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("van","") + "</span>" if vb.get(t,{}).get("van","") else ""}</td>'
-            f'<td>{"<span class=vb-tag>" + vb.get(t,{}).get("kia","") + "</span>" if vb.get(t,{}).get("kia","") else ""}</td></tr>'
-            for t in times
-        ])
+        vb_list = d_data.get("vehicle_bookings", [])
+        # Backward compat: old dict format
+        if isinstance(vb_list, dict):
+            _conv = []
+            for _t, _v in vb_list.items():
+                if _v.get("van",""): _conv.append({"vehicle":"Van","booker":_v["van"],"whole_day":True,"start_time":"","end_time":""})
+                if _v.get("kia",""): _conv.append({"vehicle":"Kia","booker":_v["kia"],"whole_day":True,"start_time":"","end_time":""})
+            vb_list = _conv
+        if vb_list:
+            def _dm_vb_time(b):
+                if b.get("whole_day", True):
+                    return "All day"
+                return f"{b.get('start_time','?')} – {b.get('end_time','?')}"
+            vb_rows_html = "".join([
+                f'<tr><td class="vb-time">{"🚐 Van" if b.get("vehicle","")=="Van" else "🚙 Kia"}</td>'
+                f'<td><span class="vb-tag">{b.get("booker","")}</span></td>'
+                f'<td style="font-size:0.58rem;color:#6BBF4E;">{_dm_vb_time(b)}</td></tr>'
+                for b in vb_list if b.get("booker","")
+            ])
+        else:
+            vb_rows_html = '<tr><td colspan="3" class="dt-em">No bookings today</td></tr>'
         st.markdown(f"""
         <div class="dp"><div class="dp-header navy">🚗 Vehicles</div><div class="dp-body">
-        <table class="dt"><tr><th>Time</th><th>VAN</th><th>KIA</th></tr>{vb_rows}</table>
+        <table class="dt"><tr><th>Vehicle</th><th>Booked By</th><th>Time</th></tr>{vb_rows_html}</table>
         </div></div>
         """, unsafe_allow_html=True)
 
@@ -834,44 +963,43 @@ if params.get("display") == "true":
 
     # ── ROW 3: Program Changes (full width) ──
     pc_rows = d_data.get("program_changes", [])
-    pc_filtered = [r for r in pc_rows if any(r.get(k,"") for k in r)]
-    time_slots = ["9:00-9:30","9:30-10:00","10:00-10:30","10:30-11:00","11:00-11:30",
-                  "11:30-12:00","12:00-12:30","12:30-1:00","1:00-1:30","1:30-2:00","2:00-2:30","2:30-2:45"]
-    pc_headers = "<th>TRT</th><th>CLC Resp.</th><th>Type</th><th>Staff Absent</th><th>JP</th><th>PY</th><th>SY</th><th>NIT</th>" + "".join([f"<th>{s}</th>" for s in time_slots])
-    pc_body = ""
-    if pc_filtered:
-        for r in pc_filtered:
-            cells = "".join([f"<td>{r.get(k,'')}</td>" for k in ["TRT","CLC Responsibility","Type","CLC Staff Absent","JP","PY","SY","NIT"]])
-            cells += "".join([f'<td class="slot {"filled" if r.get(s,"") else ""}">{r.get(s,"")}</td>' for s in time_slots])
-            pc_body += f"<tr>{cells}</tr>"
-    else:
-        pc_body = '<tr><td colspan="20" class="dt-em">No program changes today</td></tr>'
+    pc_active = [r for r in pc_rows if isinstance(r,dict) and r.get("change_reason","")]
+    if pc_active:
+        pc_html_parts = []
+        for pc in pc_active:
+            reason  = pc.get("change_reason","")
+            absent  = pc.get("staff_absent","")
+            trt     = pc.get("trt", False)
+            trt_nm  = pc.get("trt_name","")
+            covering = pc.get("covering","")
+            prog    = pc.get("program","")
+            smember = pc.get("staff_member","")
+            rel     = pc.get("release_type","")
 
-    st.markdown(f"""
-    <div class="dp"><div class="dp-header green">📊 Program Changes</div><div class="dp-body pc-wrap">
-    <table class="dt pc-table"><tr>{pc_headers}</tr>{pc_body}</table>
-    </div></div>
-    """, unsafe_allow_html=True)
+            label_parts = []
+            if reason: label_parts.append(f"<strong style='color:#6BBF4E;'>{reason}</strong>")
+            if absent: label_parts.append(f"Absent: {absent}")
+            if trt and trt_nm: label_parts.append(f"TRT: {trt_nm}")
+            if covering == "Program" and prog: label_parts.append(f"Covering: {prog}")
+            elif covering == "NIT": label_parts.append("Covering: NIT")
+            if smember: label_parts.append(f"Staff: {smember}")
+            if rel: label_parts.append(f"Role: {rel}")
 
-    # ── Staff Notices row (display mode) ──
-    d_notices = load_notices(for_date=today)
-    if d_notices:
-        n_parts = []
-        for n in d_notices:
-            cat = n.get("category","General")
-            nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
-            n_parts.append(
-                f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.58rem;'
-                f'font-weight:700;text-transform:uppercase;letter-spacing:0.06em;'
-                f'padding:0.1rem 0.4rem;border-radius:10px;">{cat}</span> '
-                f'<strong style="color:#c8d8c8;font-size:0.65rem;">{n.get("title","")}</strong>'
-                f'<span style="color:#8aaa8a;font-size:0.62rem;"> — {n.get("body","")}</span>'
-                f'<span style="color:#4a6a4a;font-size:0.58rem;"> · {n.get("submitted_by","")}</span>'
+            tt_html = _pc_timetable_html(pc, dark=True)
+            pc_html_parts.append(
+                f'<div style="margin-bottom:6px;">'
+                f'<div style="font-size:0.6rem;margin-bottom:3px;">{" · ".join(label_parts)}</div>'
+                f'{tt_html}'
+                f'</div>'
             )
-        n_html = "<br>".join(n_parts)
         st.markdown(
-            f'<div class="dp"><div class="dp-header green">📝 Staff Notices</div>'
-            f'<div class="dp-body"><div style="font-family:DM Sans,sans-serif;line-height:1.8;">{n_html}</div></div></div>',
+            f'<div class="dp"><div class="dp-header green">📊 Program Changes</div>'
+            f'<div class="dp-body">{"".join(pc_html_parts)}</div></div>',
+            unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div class="dp"><div class="dp-header green">📊 Program Changes</div>'
+            '<div class="dp-body"><span class="dt-em">No program changes today</span></div></div>',
             unsafe_allow_html=True)
 
     # ── Live clock JS (Adelaide time) — must use components to run JS ──
@@ -1177,6 +1305,39 @@ with page_tab:
 
     st.markdown('<div class="content-area">', unsafe_allow_html=True)
 
+    # ══ STAFF NOTICES — shown first on admin page ═══════════════════════════
+    _admin_notices = load_notices(for_date=current_date)
+    if _admin_notices or edit:
+        st.markdown('<div class="section-card"><div class="section-card-header green"><h3>📝 Staff Notices</h3></div><div class="section-card-body">', unsafe_allow_html=True)
+        if _admin_notices:
+            for _n in _admin_notices:
+                _cat = _n.get("category","General")
+                _nc  = NOTICE_CATS.get(_cat, NOTICE_CATS["General"])
+                _nid = _n.get("id","")
+                _nc1, _nc2 = st.columns([9,1])
+                with _nc1:
+                    st.markdown(
+                        f'<div style="background:white;border-radius:10px;border-left:4px solid {_nc["color"]};'
+                        f'padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                        f'<div style="margin-bottom:0.2rem;">'
+                        f'<span style="background:{_nc["bg"]};color:{_nc["color"]};font-size:0.65rem;font-weight:700;'
+                        f'text-transform:uppercase;letter-spacing:0.08em;padding:0.15rem 0.5rem;border-radius:20px;">'
+                        f'{_nc["emoji"]} {_cat}</span>'
+                        f'<span style="font-size:0.7rem;color:#9ab09a;margin-left:0.5rem;">from {_n.get("submitted_by","")}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.9rem;font-weight:700;color:#1a2e44;margin:0.3rem 0 0.2rem;">{_n.get("title","")}</div>'
+                        f'<div style="font-size:0.82rem;color:#3a4a3a;line-height:1.5;">{_n.get("body","")}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True)
+                with _nc2:
+                    if edit:
+                        st.write("")
+                        if st.button("🗑️", key=f"top_del_n_{_nid}", help="Delete notice"):
+                            delete_notice(_nid); st.rerun()
+        else:
+            st.markdown('<div style="text-align:center;padding:1rem;color:#9ab09a;font-size:0.85rem;">No notices today — staff can add via the 📝 Quick Add tab</div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
     # ═══════════════════════════════════════════════════════
     # SECTION TABS
     # ═══════════════════════════════════════════════════════
@@ -1326,30 +1487,81 @@ with page_tab:
 
         # Vehicle bookings
         st.markdown('<div class="section-card"><div class="section-card-header navy"><h3>🚗 Vehicle Bookings — Van & Kia</h3></div><div class="section-card-body">', unsafe_allow_html=True)
-        times = ["9:00","10:00","11:00","12:00","1:00","2:00","3:00"]
-        vb = bulletin_data["vehicle_bookings"]
+        vb_list = bulletin_data.get("vehicle_bookings", [])
+        if isinstance(vb_list, dict):
+            vb_list = []  # discard old format silently
 
         if edit:
-            v_cols = st.columns(7)
-            new_vb = {}
-            for i, t in enumerate(times):
-                with v_cols[i]:
-                    st.markdown(f"**{t}**")
-                    new_vb[t] = {
-                        "van": st.text_input("VAN", vb.get(t,{}).get("van",""), key=f"vb_van_{t}"),
-                        "kia": st.text_input("KIA", vb.get(t,{}).get("kia",""), key=f"vb_kia_{t}"),
-                    }
-            bulletin_data["vehicle_bookings"] = new_vb
+            # ── Show existing bookings ──────────────────────────────
+            if vb_list:
+                st.markdown("**Current bookings:**")
+                for _bi, _bk in enumerate(vb_list):
+                    _bc1, _bc2, _bc3, _bc4 = st.columns([1,2,2,1])
+                    with _bc1:
+                        st.markdown(f"**{'🚐 Van' if _bk.get('vehicle','')=='Van' else '🚙 Kia'}**")
+                    with _bc2:
+                        st.markdown(f"**{_bk.get('booker','—')}**")
+                    with _bc3:
+                        if _bk.get("whole_day", True):
+                            st.markdown("🕐 Whole day")
+                        else:
+                            st.markdown(f"🕐 {_bk.get('start_time','?')} – {_bk.get('end_time','?')}")
+                    with _bc4:
+                        if st.button("🗑️", key=f"vb_del_{_bi}", help="Remove booking"):
+                            vb_list.pop(_bi)
+                            bulletin_data["vehicle_bookings"] = vb_list
+                            st.rerun()
+                st.markdown("---")
+
+            # ── Add a new booking ───────────────────────────────────
+            st.markdown("**Add a booking:**")
+            _av1, _av2, _av3 = st.columns([1,2,2])
+            with _av1:
+                _new_vehicle = st.selectbox("Vehicle", ["Van", "Kia"], key="vb_new_vehicle")
+            with _av2:
+                _new_booker = st.text_input("Booked by (name)", key="vb_new_booker", placeholder="e.g. Sarah")
+            with _av3:
+                _new_whole = st.checkbox("Whole day", value=True, key="vb_new_whole")
+            if not _new_whole:
+                _at1, _at2 = st.columns(2)
+                with _at1:
+                    _new_start = st.text_input("Start time", key="vb_new_start", placeholder="e.g. 9:30")
+                with _at2:
+                    _new_end = st.text_input("End time", key="vb_new_end", placeholder="e.g. 12:00")
+            else:
+                _new_start = ""
+                _new_end = ""
+
+            if st.button("➕ Add Booking", type="primary", key="vb_add_btn"):
+                if _new_booker.strip():
+                    vb_list.append({
+                        "vehicle": _new_vehicle,
+                        "booker": _new_booker.strip(),
+                        "whole_day": _new_whole,
+                        "start_time": _new_start.strip(),
+                        "end_time": _new_end.strip(),
+                    })
+                    bulletin_data["vehicle_bookings"] = vb_list
+                    st.rerun()
+                else:
+                    st.warning("Please enter a name for this booking.")
+
         else:
-            has_vb = any(vb.get(t,{}).get("van","") or vb.get(t,{}).get("kia","") for t in times)
-            if has_vb:
+            # ── View mode ───────────────────────────────────────────
+            if vb_list and any(b.get("booker","") for b in vb_list):
+                def _vb_time(b):
+                    if b.get("whole_day", True):
+                        return "Whole day"
+                    return f"{b.get('start_time','?')} – {b.get('end_time','?')}"
                 rows_html = "".join([
-                    f'<tr><td class="vehicle-time">{t}</td>'
-                    f'<td>{"<span class=vehicle-booking>" + vb.get(t,{}).get("van","") + "</span>" if vb.get(t,{}).get("van","") else ""}</td>'
-                    f'<td>{"<span class=vehicle-booking>" + vb.get(t,{}).get("kia","") + "</span>" if vb.get(t,{}).get("kia","") else ""}</td></tr>'
-                    for t in times
+                    f'<tr>'
+                    f'<td>{"🚐 Van" if b.get("vehicle","")=="Van" else "🚙 Kia"}</td>'
+                    f'<td><span class="vehicle-booking">{b.get("booker","")}</span></td>'
+                    f'<td class="vehicle-time">{_vb_time(b)}</td>'
+                    f'</tr>'
+                    for b in vb_list if b.get("booker","")
                 ])
-                st.markdown(f'<table class="data-table"><tr><th>Time</th><th>VAN</th><th>KIA</th></tr>{rows_html}</table>', unsafe_allow_html=True)
+                st.markdown(f'<table class="data-table"><tr><th>Vehicle</th><th>Booked By</th><th>Time</th></tr>{rows_html}</table>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="empty-state"><div class="icon">🚗</div>No vehicle bookings today</div>', unsafe_allow_html=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
@@ -1400,69 +1612,232 @@ with page_tab:
     # TAB S4: Program Changes
     # ─────────────────────────────────────────────────────
     with s4:
-        st.markdown('<div class="section-card"><div class="section-card-header navy"><h3>📊 Program Changes</h3></div><div class="section-card-body">', unsafe_allow_html=True)
-        import pandas as pd
-        pc_rows = bulletin_data["program_changes"]
-        df = pd.DataFrame(pc_rows)
 
+        # ── Manage entries list in session_state so Add works across reruns ──
+        _pc_state_key = f"pc_n_{current_date}"
         if edit:
-            edited = st.data_editor(df, key="pc_editor", hide_index=True, use_container_width=True, num_rows="dynamic",
-                column_config={"Type": st.column_config.SelectboxColumn("Type",
-                    options=["","Lunch break","NIT change","Addition NIT","Program Teacher"])})
-            bulletin_data["program_changes"] = edited.to_dict("records")
+            if _pc_state_key not in st.session_state:
+                # Count usable new-format entries from DB
+                _loaded_pc = bulletin_data.get("program_changes", [])
+                _n_loaded = len([e for e in _loaded_pc if isinstance(e,dict) and "change_reason" in e])
+                st.session_state[_pc_state_key] = max(1, _n_loaded)
         else:
-            has_data = any(any(v for v in r.values()) for r in pc_rows)
-            if has_data:
-                st.markdown('<div class="pc-scroll">', unsafe_allow_html=True)
-                headers = list(df.columns)
-                header_html = "".join([f"<th>{h}</th>" for h in headers])
-                rows_html = ""
-                for r in pc_rows:
-                    if any(v for v in r.values()):
-                        cells = ""
-                        for h in headers:
-                            val = r.get(h,"")
-                            is_time = ":" in h and "-" in h
-                            cls = "timeslot filled" if (is_time and val) else ("timeslot" if is_time else "")
-                            cells += f'<td class="{cls}">{val}</td>'
-                        rows_html += f"<tr>{cells}</tr>"
-                st.markdown(f'<table class="data-table pc-table"><tr>{header_html}</tr>{rows_html}</table></div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="empty-state"><div class="icon">📊</div>No program changes today</div>', unsafe_allow_html=True)
-        st.markdown('</div></div>', unsafe_allow_html=True)
+            if _pc_state_key in st.session_state:
+                del st.session_state[_pc_state_key]
 
-        # ── Staff Notices card ──
-        b_notices = load_notices(for_date=current_date)
-        if b_notices or edit:
-            st.markdown('<div class="section-card"><div class="section-card-header green"><h3>📝 Staff Notices</h3></div><div class="section-card-body">', unsafe_allow_html=True)
-            if b_notices:
-                for n in b_notices:
-                    cat = n.get("category","General")
-                    nc  = NOTICE_CATS.get(cat, NOTICE_CATS["General"])
-                    nid = n.get("id","")
-                    nc1, nc2 = st.columns([9,1])
-                    with nc1:
-                        st.markdown(
-                            f'<div style="background:white;border-radius:10px;border-left:4px solid {nc["color"]};'
-                            f'padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
-                            f'<div style="margin-bottom:0.2rem;">'
-                            f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.65rem;'
-                            f'font-weight:700;text-transform:uppercase;letter-spacing:0.08em;'
-                            f'padding:0.15rem 0.5rem;border-radius:20px;">{nc["emoji"]} {cat}</span>'
-                            f'<span style="font-size:0.7rem;color:#9ab09a;margin-left:0.5rem;">from {n.get("submitted_by","")}</span>'
-                            f'</div>'
-                            f'<div style="font-size:0.9rem;font-weight:700;color:#1a2e44;margin:0.3rem 0 0.2rem;">{n.get("title","")}</div>'
-                            f'<div style="font-size:0.82rem;color:#3a4a3a;line-height:1.5;">{n.get("body","")}</div>'
-                            f'</div>',
-                            unsafe_allow_html=True)
-                    with nc2:
-                        if edit:
-                            st.write("")
-                            if st.button("🗑️", key=f"del_n_{nid}", help="Delete notice"):
-                                delete_notice(nid); st.rerun()
-            else:
-                st.markdown('<div style="text-align:center;padding:1.5rem;color:#9ab09a;font-size:0.85rem;">No notices today — staff can add via the 📝 Quick Add tab</div>', unsafe_allow_html=True)
-            st.markdown('</div></div>', unsafe_allow_html=True)
+        _n_entries = st.session_state.get(_pc_state_key, 1)
+        _loaded_pc = bulletin_data.get("program_changes", [])
+
+        # ── Helper: render one timetable entry ──────────────────────────────
+        def _render_timetable(idx, covering_mode, entry_slots, prog_default=""):
+            """Render 15-min slot grid. covering_mode = 'program' or 'nit'."""
+            # Colour hint legend
+            if covering_mode == "nit":
+                st.markdown(
+                    '<div style="font-size:0.72rem;margin-bottom:0.5rem;">'
+                    '<span style="background:#fff3cd;padding:2px 8px;border-radius:4px;margin-right:6px;">🟡 Lunch Cover</span>'
+                    '<span style="background:#cce5ff;padding:2px 8px;border-radius:4px;">🔵 Lunch Break</span>'
+                    '</div>',
+                    unsafe_allow_html=True)
+
+            # Render 4 slots per row (1 hour per row)
+            for row_start in range(0, len(PC_TIME_SLOTS), 4):
+                row_slots = PC_TIME_SLOTS[row_start:row_start+4]
+                cols = st.columns(4)
+                for j, slot in enumerate(row_slots):
+                    with cols[j]:
+                        stored = entry_slots.get(slot, {})
+                        stored_val  = stored.get("value","")  if isinstance(stored,dict) else stored
+                        stored_pers = stored.get("person","") if isinstance(stored,dict) else ""
+
+                        # Default index for selectbox
+                        default_val = stored_val if stored_val else prog_default
+                        try:
+                            _def_idx = PC_SLOT_OPTIONS.index(default_val)
+                        except ValueError:
+                            _def_idx = 0
+
+                        chosen = st.selectbox(
+                            slot,
+                            PC_SLOT_OPTIONS,
+                            index=_def_idx,
+                            key=f"pc_slot_v_{idx}_{slot}",
+                        )
+
+                        # Colour highlight feedback
+                        if chosen == "Lunch Cover":
+                            st.markdown('<div style="background:#fff3cd;height:4px;border-radius:2px;"></div>', unsafe_allow_html=True)
+                        elif chosen == "Lunch Break":
+                            st.markdown('<div style="background:#cce5ff;height:4px;border-radius:2px;"></div>', unsafe_allow_html=True)
+
+                        if covering_mode == "nit":
+                            st.text_input(
+                                "Name",
+                                value=stored_pers,
+                                key=f"pc_slot_p_{idx}_{slot}",
+                                placeholder="Person...",
+                                label_visibility="collapsed",
+                            )
+
+        # ── Render each program change entry ────────────────────────────────
+        for _i in range(_n_entries):
+            # Load persisted entry data from DB for initial widget defaults
+            _db_entry = _loaded_pc[_i] if _i < len(_loaded_pc) else _empty_pc()
+            if not isinstance(_db_entry, dict) or "change_reason" not in _db_entry:
+                _db_entry = _empty_pc()
+            _db_ts = _db_entry.get("time_slots", {})
+
+            with st.expander(f"Program Change #{_i+1}", expanded=True):
+                # Clear button
+                _clr_col, _ = st.columns([1,5])
+                with _clr_col:
+                    if st.button("🗑️ Clear entry", key=f"pc_clr_{_i}"):
+                        # Remove all widget keys for this entry
+                        for _slot in PC_TIME_SLOTS:
+                            for _sfx in ["v","p"]:
+                                _sk = f"pc_slot_{_sfx}_{_i}_{_slot}"
+                                if _sk in st.session_state: del st.session_state[_sk]
+                        for _fld in [f"pc_reason_{_i}", f"pc_sa_{_i}", f"pc_trt_{_i}",
+                                     f"pc_trt_name_{_i}", f"pc_covering_{_i}", f"pc_prog_{_i}",
+                                     f"pc_smember_{_i}", f"pc_release_{_i}"]:
+                            if _fld in st.session_state: del st.session_state[_fld]
+                        st.rerun()
+
+                if not edit:
+                    # View-only display for this entry
+                    if _db_entry.get("change_reason",""):
+                        st.markdown(f"**{_db_entry.get('change_reason','')}**")
+                        if _db_entry.get("staff_absent",""): st.markdown(f"Staff absent: {_db_entry['staff_absent']}")
+                        if _db_entry.get("trt",False) and _db_entry.get("trt_name",""): st.markdown(f"TRT: {_db_entry['trt_name']}")
+                        if _db_entry.get("covering",""): st.markdown(f"Covering: {_db_entry.get('covering','')} {_db_entry.get('program','')}")
+                        if _db_entry.get("staff_member",""): st.markdown(f"Staff: {_db_entry['staff_member']}")
+                        if _db_entry.get("release_type",""): st.markdown(f"Role: {_db_entry['release_type']}")
+                        _tt = _pc_timetable_html(_db_entry, dark=False)
+                        if _tt: st.markdown(_tt, unsafe_allow_html=True)
+                    else:
+                        st.markdown('<div class="empty-state"><div class="icon">📊</div>No change entered</div>', unsafe_allow_html=True)
+                    continue  # skip edit widgets
+
+                # ── STEP 1: Reason ──────────────────────────────────────────
+                st.markdown("**Step 1 — What is the reason for this change?**")
+                _reason_opts = ["— Select —", "Staff Absence", "Site Need"]
+                _reason_def  = _db_entry.get("change_reason","")
+                try: _r_idx = _reason_opts.index(_reason_def)
+                except: _r_idx = 0
+                _reason = st.radio(
+                    "Change reason",
+                    _reason_opts,
+                    index=_r_idx,
+                    key=f"pc_reason_{_i}",
+                    horizontal=True,
+                    label_visibility="collapsed",
+                )
+
+                if _reason == "Staff Absence":
+                    st.markdown("---")
+                    st.markdown("**Step 2 — Staff member absent**")
+                    st.text_input("Name of absent staff member", value=_db_entry.get("staff_absent",""),
+                                  key=f"pc_sa_{_i}", placeholder="e.g. John Smith")
+
+                    st.markdown("**Step 3 — Is a TRT involved?**")
+                    _trt = st.checkbox("Yes, a TRT is covering", value=bool(_db_entry.get("trt",False)), key=f"pc_trt_{_i}")
+                    if _trt:
+                        st.text_input("TRT name", value=_db_entry.get("trt_name",""), key=f"pc_trt_name_{_i}", placeholder="e.g. Ms Jones")
+                        st.markdown("**Step 4 — What is the TRT covering?**")
+                        _cov_opts = ["Program", "NIT"]
+                        try: _cov_idx = _cov_opts.index(_db_entry.get("covering","Program"))
+                        except: _cov_idx = 0
+                        _covering = st.radio("TRT covering", _cov_opts, index=_cov_idx,
+                                             key=f"pc_covering_{_i}", horizontal=True,
+                                             label_visibility="collapsed")
+
+                        if _covering == "Program":
+                            st.markdown("**Step 5 — Which program?**")
+                            _prog_opts = ["JP", "PY", "SY"]
+                            try: _prog_idx = _prog_opts.index(_db_entry.get("program","JP"))
+                            except: _prog_idx = 0
+                            _prog = st.radio("Program", _prog_opts, index=_prog_idx,
+                                             key=f"pc_prog_{_i}", horizontal=True,
+                                             label_visibility="collapsed")
+                            st.markdown(f"**Timetable — auto-filled as {_prog} (all slots editable):**")
+                            _render_timetable(_i, "program", _db_ts, prog_default=_prog)
+                        else:  # NIT
+                            st.markdown("**Timetable — NIT coverage (enter details per slot):**")
+                            _render_timetable(_i, "nit", _db_ts)
+
+                elif _reason == "Site Need":
+                    st.markdown("---")
+                    st.markdown("**Step 2 — Is a TRT involved?**")
+                    _trt = st.checkbox("Yes, a TRT is covering", value=bool(_db_entry.get("trt",False)), key=f"pc_trt_{_i}")
+                    if _trt:
+                        st.text_input("TRT name", value=_db_entry.get("trt_name",""), key=f"pc_trt_name_{_i}", placeholder="e.g. Ms Jones")
+                        st.markdown("**Step 3 — What is the TRT covering?**")
+                        _cov_opts = ["Program", "NIT"]
+                        try: _cov_idx = _cov_opts.index(_db_entry.get("covering","Program"))
+                        except: _cov_idx = 0
+                        _covering = st.radio("TRT covering", _cov_opts, index=_cov_idx,
+                                             key=f"pc_covering_{_i}", horizontal=True,
+                                             label_visibility="collapsed")
+                        if _covering == "Program":
+                            _prog_opts = ["JP", "PY", "SY"]
+                            try: _prog_idx = _prog_opts.index(_db_entry.get("program","JP"))
+                            except: _prog_idx = 0
+                            _prog = st.radio("Program", _prog_opts, index=_prog_idx,
+                                             key=f"pc_prog_{_i}", horizontal=True,
+                                             label_visibility="collapsed")
+                            st.markdown(f"**Timetable — auto-filled as {_prog} (all slots editable):**")
+                            _render_timetable(_i, "program", _db_ts, prog_default=_prog)
+                        else:
+                            st.markdown("**Timetable — NIT coverage (enter details per slot):**")
+                            _render_timetable(_i, "nit", _db_ts)
+                    else:
+                        # No TRT — choose staff member and release type
+                        st.markdown("**Step 3 — Which staff member?**")
+                        st.text_input("Staff member name", value=_db_entry.get("staff_member",""),
+                                      key=f"pc_smember_{_i}", placeholder="e.g. Sarah")
+                        st.markdown("**Step 4 — What is their role in this change?**")
+                        _rel_opts = [
+                            "— Select —",
+                            "Receiving release time",
+                            "Covering release time for staff member",
+                            "Covering Lunch cover",
+                        ]
+                        try: _rel_idx = _rel_opts.index(_db_entry.get("release_type",""))
+                        except: _rel_idx = 0
+                        st.radio("Role", _rel_opts, index=_rel_idx,
+                                 key=f"pc_release_{_i}", horizontal=False,
+                                 label_visibility="collapsed")
+
+        # ── Add entry button ─────────────────────────────────────────────────
+        if edit:
+            st.markdown("")
+            if st.button("➕ Add another program change", key="pc_add_entry"):
+                st.session_state[_pc_state_key] = _n_entries + 1
+                st.rerun()
+
+        # ── Collect all entry values into bulletin_data for save ─────────────
+        if edit:
+            _collected_pc = []
+            for _i in range(_n_entries):
+                _ts = {}
+                for _slot in PC_TIME_SLOTS:
+                    _v = st.session_state.get(f"pc_slot_v_{_i}_{_slot}", "")
+                    _p = st.session_state.get(f"pc_slot_p_{_i}_{_slot}", "")
+                    if _v or _p:
+                        _ts[_slot] = {"value": _v, "person": _p}
+                _e = {
+                    "change_reason":  st.session_state.get(f"pc_reason_{_i}", ""),
+                    "staff_absent":   st.session_state.get(f"pc_sa_{_i}", ""),
+                    "trt":            st.session_state.get(f"pc_trt_{_i}", False),
+                    "trt_name":       st.session_state.get(f"pc_trt_name_{_i}", ""),
+                    "covering":       st.session_state.get(f"pc_covering_{_i}", ""),
+                    "program":        st.session_state.get(f"pc_prog_{_i}", ""),
+                    "staff_member":   st.session_state.get(f"pc_smember_{_i}", ""),
+                    "release_type":   st.session_state.get(f"pc_release_{_i}", ""),
+                    "time_slots":     _ts,
+                }
+                _collected_pc.append(_e)
+            bulletin_data["program_changes"] = _collected_pc
 
     st.markdown('</div>', unsafe_allow_html=True)  # end content-area
 
