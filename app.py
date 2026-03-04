@@ -537,7 +537,7 @@ PC_TIME_SLOTS = [
     "2:00","2:15","2:30","2:45",
 ]
 PC_SLOT_OPTIONS     = ["", "JP", "PY", "SY", "Lunch Cover", "Lunch Break", "NIT", "Other"]
-PC_SLOT_OPTIONS_EXT = ["Normal Duties", "JP Cover", "PY Cover", "SY Cover", "Lunch Cover", "Lunch Break", "Other"]
+PC_SLOT_OPTIONS_EXT = ["", "JP Cover", "PY Cover", "SY Cover", "Lunch Cover", "Lunch Break", "Other"]
 
 # Colour map for slot values (used in both edit indicators and HTML rendering)
 def _slot_color(val, dark=False):
@@ -1725,10 +1725,10 @@ with page_tab:
             # Legend
             st.markdown(
                 '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'
-                '<span style="background:#e8f5e1;color:#2d6b1a;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🟩 Program</span>'
+                '<span style="background:#f0f4f0;color:#5a6e5a;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">⬜ Blank = no change</span>'
+                '<span style="background:#e8f5e1;color:#2d6b1a;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🟩 Program cover</span>'
                 '<span style="background:#fff3cd;color:#856404;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🟡 Lunch Cover</span>'
                 '<span style="background:#cce5ff;color:#004085;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🔵 Lunch Break</span>'
-                '<span style="background:#f0f0f0;color:#555;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">⬜ Normal Duties</span>'
                 '</div>',
                 unsafe_allow_html=True)
 
@@ -2128,6 +2128,253 @@ with page_tab:
 
     st.markdown('</div>', unsafe_allow_html=True)  # end content-area
 
+    # ── BOTTOM SAVE BUTTONS ──────────────────────────────────────────────
+    if edit:
+        st.markdown('<div style="background:white;border-top:2px solid #e8f0e3;padding:1rem 2rem;position:sticky;bottom:0;z-index:100;display:flex;gap:1rem;align-items:center;">', unsafe_allow_html=True)
+        bsv1, bsv2, bsv3 = st.columns([2, 2, 6])
+        with bsv1:
+            if st.button("💾 Save Bulletin", type="primary", use_container_width=True, key="bottom_save"):
+                st.session_state["_pending_save"] = True
+        with bsv2:
+            if st.button("🚪 Discard & Exit", type="secondary", use_container_width=True, key="bottom_discard"):
+                st.session_state.edit_mode = False
+                st.rerun()
+        with bsv3:
+            st.markdown('<span style="font-size:0.78rem;color:#9ab09a;">💡 Changes are saved to the database and appear on the staff room display immediately.</span>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── PROGRAM CHANGES EXPORT / SHARE ──────────────────────────────────
+    _export_pc = bulletin_data.get("program_changes", [])
+    _export_active = [e for e in _export_pc if isinstance(e,dict) and e.get("change_reason","")]
+
+    if _export_active:
+        st.markdown("---")
+        st.markdown(
+            '<div style="background:white;border-radius:12px;border:1.5px solid #d8e8d4;'
+            'padding:1.25rem 1.5rem;margin-bottom:1rem;">'
+            '<div style="font-size:1rem;font-weight:700;color:#1a2e44;margin-bottom:0.25rem;">📤 Share Program Changes</div>'
+            '<div style="font-size:0.8rem;color:#7a907a;">Copy as plain text for SMS · download as printable sheet for email or TRT</div>'
+            '</div>',
+            unsafe_allow_html=True)
+
+        def _build_plain_text(entries, for_date):
+            """Build a clean plain-text summary suitable for SMS or email body."""
+            lines = []
+            lines.append(f"CLC PROGRAM CHANGES — {for_date.strftime('%A %-d %B %Y').upper()}")
+            lines.append("=" * 52)
+            for idx, e in enumerate(entries, 1):
+                reason  = e.get("change_reason","")
+                absent  = e.get("staff_absent","")
+                trt     = e.get("trt", False)
+                trt_nm  = e.get("trt_name","")
+                covering = e.get("covering","")
+                program  = e.get("program","")
+                smember  = e.get("staff_member","")
+                rel      = e.get("release_type","")
+
+                lines.append(f"\n[{idx}] {reason.upper()}")
+                if absent:  lines.append(f"    Absent: {absent}")
+                if trt:     lines.append(f"    TRT: {trt_nm or '(name not entered)'}")
+                if covering: lines.append(f"    Covering: {covering}{' — ' + program if program else ''}")
+                if smember: lines.append(f"    Staff: {smember} ({rel})")
+
+                # TRT timetable
+                ts = e.get("time_slots", {})
+                if ts and any((v.get("value","") if isinstance(v,dict) else v) for v in ts.values()):
+                    lines.append(f"    Timetable ({trt_nm or 'TRT'}):")
+                    for slot in PC_TIME_SLOTS:
+                        raw = ts.get(slot, {})
+                        val = raw.get("value","") if isinstance(raw,dict) else str(raw)
+                        person = raw.get("person","") if isinstance(raw,dict) else ""
+                        if val:
+                            person_str = ""
+                            if val == "Lunch Cover" and person: person_str = f" → releasing {person}"
+                            elif val == "Lunch Break" and person: person_str = f" ↩ covered by {person}"
+                            elif person: person_str = f" ({person})"
+                            lines.append(f"      {slot:>7}  {val}{person_str}")
+
+                # Staff allocations
+                for alloc in e.get("staff_allocations", []):
+                    a_name = alloc.get("name","(Staff)")
+                    a_norm = alloc.get("normal_prog","")
+                    a_ts   = alloc.get("time_slots", {})
+                    if not a_ts or not any((v.get("value","") if isinstance(v,dict) else v) for v in a_ts.values()):
+                        continue
+                    norm_str = f" [normally: {a_norm}]" if a_norm else ""
+                    lines.append(f"    {a_name}{norm_str}:")
+                    for slot in PC_TIME_SLOTS:
+                        raw = a_ts.get(slot, {})
+                        val = raw.get("value","") if isinstance(raw,dict) else str(raw)
+                        person = raw.get("person","") if isinstance(raw,dict) else ""
+                        if val:
+                            person_str = ""
+                            if val == "Lunch Cover" and person: person_str = f" → releasing {person}"
+                            elif val == "Lunch Break" and person: person_str = f" ↩ covered by {person}"
+                            elif person: person_str = f" ({person})"
+                            lines.append(f"      {slot:>7}  {val}{person_str}")
+
+            lines.append("\n" + "=" * 52)
+            lines.append("Cowandilla Learning Centre · clcdailybulletin.streamlit.app")
+            return "\n".join(lines)
+
+        def _build_html_sheet(entries, for_date):
+            """Build a self-contained printable HTML page."""
+            COLORS = {
+                "JP Cover":    ("#1d4ed8","#dbeafe"),
+                "PY Cover":    ("#6d28d9","#ede9fe"),
+                "SY Cover":    ("#92400e","#fef3c7"),
+                "JP":          ("#1d4ed8","#dbeafe"),
+                "PY":          ("#6d28d9","#ede9fe"),
+                "SY":          ("#92400e","#fef3c7"),
+                "Lunch Cover": ("#856404","#fff3cd"),
+                "Lunch Break": ("#004085","#cce5ff"),
+                "NIT":         ("#374151","#f3f4f6"),
+                "Other":       ("#5b21b6","#f5f3ff"),
+            }
+
+            def slot_td(val, person, size="0.62rem"):
+                c, bg = COLORS.get(val, ("#374151","#f9fafb")) if val else ("#ccc","#fff")
+                disp = val if val else ""
+                person_html = ""
+                if person:
+                    if val == "Lunch Cover":   person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">→ {person}</small>'
+                    elif val == "Lunch Break": person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">↩ {person}</small>'
+                    else:                      person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">{person}</small>'
+                return (f'<td style="background:{bg};color:{c};text-align:center;padding:3px 2px;'
+                        f'font-size:{size};font-weight:600;min-width:38px;border:1px solid #e5e7eb;">'
+                        f'{disp}{person_html}</td>')
+
+            def tt_table(name, normal_prog, ts):
+                norm_str = f' <span style="font-weight:400;color:#6b7280;font-size:0.75em;">({normal_prog})</span>' if normal_prog else ""
+                header = "".join([f'<th style="background:#1a2e44;color:rgba(255,255,255,0.8);font-size:0.52rem;padding:2px 3px;text-align:center;min-width:38px;border:1px solid #374151;">{s}</th>' for s in PC_TIME_SLOTS])
+                cells  = "".join([slot_td(
+                    (ts.get(s,{}).get("value","")  if isinstance(ts.get(s,{}),dict) else ts.get(s,"")),
+                    (ts.get(s,{}).get("person","") if isinstance(ts.get(s,{}),dict) else "")
+                ) for s in PC_TIME_SLOTS])
+                return (f'<div style="margin:6px 0 10px;">'
+                        f'<div style="font-weight:700;font-size:0.8rem;color:#1a2e44;margin-bottom:3px;">'
+                        f'👤 {name}{norm_str}</div>'
+                        f'<div style="overflow-x:auto;">'
+                        f'<table style="border-collapse:collapse;"><tr>{header}</tr><tr>{cells}</tr></table>'
+                        f'</div></div>')
+
+            entries_html = ""
+            for idx, e in enumerate(entries, 1):
+                reason  = e.get("change_reason","")
+                absent  = e.get("staff_absent","")
+                trt     = e.get("trt", False)
+                trt_nm  = e.get("trt_name","")
+                covering = e.get("covering","")
+                program  = e.get("program","")
+                smember  = e.get("staff_member","")
+                rel      = e.get("release_type","")
+
+                meta_bits = []
+                if absent:   meta_bits.append(f"<strong>Absent:</strong> {absent}")
+                if trt:      meta_bits.append(f"<strong>TRT:</strong> {trt_nm or '(name TBC)'}")
+                else:        meta_bits.append("<strong>No TRT</strong>")
+                if covering: meta_bits.append(f"<strong>Covering:</strong> {covering}{' — '+program if program else ''}")
+                if smember:  meta_bits.append(f"<strong>Staff:</strong> {smember} ({rel})")
+                meta_html = " &nbsp;·&nbsp; ".join(meta_bits)
+
+                timetables_html = ""
+                ts = e.get("time_slots", {})
+                if ts and any((v.get("value","") if isinstance(v,dict) else v) for v in ts.values()):
+                    timetables_html += tt_table(trt_nm or "TRT", covering + (" — "+program if program else ""), ts)
+                for alloc in e.get("staff_allocations", []):
+                    a_ts = alloc.get("time_slots", {})
+                    if a_ts and any((v.get("value","") if isinstance(v,dict) else v) for v in a_ts.values()):
+                        timetables_html += tt_table(alloc.get("name","Staff"), alloc.get("normal_prog",""), a_ts)
+
+                color = "#dc2626" if reason == "Staff Absence" else "#0e7490"
+                entries_html += (
+                    f'<div style="background:white;border:1.5px solid #e5e7eb;border-left:5px solid {color};'
+                    f'border-radius:8px;padding:12px 14px;margin-bottom:14px;page-break-inside:avoid;">'
+                    f'<div style="font-size:0.85rem;font-weight:800;color:{color};margin-bottom:4px;">'
+                    f'Change {idx} — {reason}</div>'
+                    f'<div style="font-size:0.78rem;color:#374151;margin-bottom:8px;">{meta_html}</div>'
+                    f'{timetables_html}'
+                    f'</div>'
+                )
+
+            legend_items = "".join([
+                f'<span style="background:{bg};color:{c};padding:2px 8px;border-radius:10px;font-size:0.65rem;font-weight:600;">{label}</span>'
+                for label, (c, bg) in [
+                    ("JP/PY/SY Cover","#1d4ed8","#dbeafe"),
+                    ("Lunch Cover","#856404","#fff3cd"),
+                    ("Lunch Break","#004085","#cce5ff"),
+                    ("Blank = no change","#374151","#f9fafb"),
+                ]
+            ])
+
+            return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>CLC Program Changes — {for_date.strftime('%A %-d %B %Y')}</title>
+<style>
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f9fafb; margin: 0; padding: 20px; color: #1a2e44; }}
+  @media print {{
+    body {{ background: white; padding: 0; }}
+    .no-print {{ display: none !important; }}
+    .page {{ box-shadow: none; margin: 0; }}
+  }}
+  .page {{ max-width: 900px; margin: 0 auto; background: white; border-radius: 12px;
+           box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 28px 32px; }}
+  h1 {{ font-size: 1.1rem; color: #1a2e44; margin: 0 0 2px; }}
+  .subtitle {{ font-size: 0.78rem; color: #6b7280; margin-bottom: 16px; }}
+  .legend {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }}
+  table {{ border-collapse: collapse; }}
+</style>
+</head><body>
+<div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;">
+    <div>
+      <h1>📊 Program Changes</h1>
+      <div class="subtitle">Cowandilla Learning Centre &nbsp;·&nbsp; {for_date.strftime('%A %-d %B %Y')}</div>
+    </div>
+    <button class="no-print" onclick="window.print()" style="background:#1a2e44;color:white;border:none;padding:8px 16px;border-radius:6px;font-size:0.8rem;cursor:pointer;">🖨️ Print</button>
+  </div>
+  <div class="legend">{legend_items}</div>
+  {entries_html}
+  <div style="font-size:0.65rem;color:#9ca3af;margin-top:20px;text-align:center;border-top:1px solid #f3f4f6;padding-top:10px;">
+    Generated from CLC Daily Bulletin · clcdailybulletin.streamlit.app
+  </div>
+</div>
+</body></html>"""
+
+        _plain = _build_plain_text(_export_active, current_date)
+        _html  = _build_html_sheet(_export_active, current_date)
+
+        _ex1, _ex2, _ex3 = st.columns([1,1,2])
+        with _ex1:
+            st.download_button(
+                "📱 Download as Text (SMS/Email)",
+                data=_plain,
+                file_name=f"CLC_ProgramChanges_{current_date.strftime('%Y-%m-%d')}.txt",
+                mime="text/plain",
+                use_container_width=True,
+                type="secondary",
+            )
+        with _ex2:
+            st.download_button(
+                "🖨️ Download Printable Sheet",
+                data=_html,
+                file_name=f"CLC_ProgramChanges_{current_date.strftime('%Y-%m-%d')}.html",
+                mime="text/html",
+                use_container_width=True,
+                type="secondary",
+            )
+        with _ex3:
+            st.markdown(
+                '<div style="font-size:0.75rem;color:#7a907a;padding-top:0.5rem;">'
+                '💡 <strong>Text file</strong> — paste into SMS or email body &nbsp;·&nbsp; '
+                '<strong>Printable sheet</strong> — open in browser, then Print or Save as PDF to email/share'
+                '</div>',
+                unsafe_allow_html=True)
+
+        # Preview
+        with st.expander("👁️ Preview plain text (for SMS / email body)", expanded=False):
+            st.code(_plain, language=None)
+
     # ── SAVE EXECUTION — runs here so all data_editors above have already
     # updated bulletin_data before we write to the database ──────────────
     if st.session_state.get("_pending_save"):
@@ -2311,4 +2558,3 @@ with login_tab:
             else:
                 st.error("Incorrect password.")
         st.markdown('</div>', unsafe_allow_html=True)
-
