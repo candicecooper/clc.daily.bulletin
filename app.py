@@ -2232,7 +2232,7 @@ with page_tab:
                 "Other":       ("#5b21b6","#f5f3ff"),
             }
 
-            def slot_td(val, person, size="0.62rem"):
+            def slot_td(val, person, size="0.48rem"):
                 c, bg = COLORS.get(val, ("#374151","#f9fafb")) if val else ("#ccc","#fff")
                 disp = val if val else ""
                 person_html = ""
@@ -2240,23 +2240,28 @@ with page_tab:
                     if val == "Lunch Cover":   person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">→ {person}</small>'
                     elif val == "Lunch Break": person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">↩ {person}</small>'
                     else:                      person_html = f'<br><small style="font-size:0.85em;opacity:0.8;">{person}</small>'
-                return (f'<td style="background:{bg};color:{c};text-align:center;padding:3px 2px;'
-                        f'font-size:{size};font-weight:600;min-width:38px;border:1px solid #e5e7eb;">'
+                return (f'<td style="background:{bg};color:{c};text-align:center;padding:2px 1px;'
+                        f'font-size:{size};font-weight:600;border:1px solid #e5e7eb;word-break:break-word;overflow:hidden;">'
                         f'{disp}{person_html}</td>')
 
             def tt_table(name, normal_prog, ts):
                 norm_str = f' <span style="font-weight:400;color:#6b7280;font-size:0.75em;">({normal_prog})</span>' if normal_prog else ""
-                header = "".join([f'<th style="background:#1a2e44;color:rgba(255,255,255,0.8);font-size:0.52rem;padding:2px 3px;text-align:center;min-width:38px;border:1px solid #374151;">{s}</th>' for s in PC_TIME_SLOTS])
-                cells  = "".join([slot_td(
+                header = "".join([
+                    f'<th style="background:#1a2e44;color:rgba(255,255,255,0.85);font-size:0.42rem;'
+                    f'padding:2px 1px;text-align:center;border:1px solid #374151;word-break:break-all;">{s}</th>'
+                    for s in PC_TIME_SLOTS])
+                cells = "".join([slot_td(
                     (ts.get(s,{}).get("value","")  if isinstance(ts.get(s,{}),dict) else ts.get(s,"")),
-                    (ts.get(s,{}).get("person","") if isinstance(ts.get(s,{}),dict) else "")
+                    (ts.get(s,{}).get("person","") if isinstance(ts.get(s,{}),dict) else ""),
+                    size="0.48rem"
                 ) for s in PC_TIME_SLOTS])
-                return (f'<div style="margin:6px 0 10px;">'
-                        f'<div style="font-weight:700;font-size:0.8rem;color:#1a2e44;margin-bottom:3px;">'
-                        f'👤 {name}{norm_str}</div>'
-                        f'<div style="overflow-x:auto;">'
-                        f'<table style="border-collapse:collapse;"><tr>{header}</tr><tr>{cells}</tr></table>'
-                        f'</div></div>')
+                return (
+                    f'<div style="margin:6px 0 10px;">'
+                    f'<div style="font-weight:700;font-size:0.8rem;color:#1a2e44;margin-bottom:3px;">👤 {name}{norm_str}</div>'
+                    f'<table style="border-collapse:collapse;width:100%;table-layout:fixed;">'
+                    f'<tr>{header}</tr><tr>{cells}</tr>'
+                    f'</table></div>'
+                )
 
             entries_html = ""
             for idx, e in enumerate(entries, 1):
@@ -2311,18 +2316,20 @@ with page_tab:
 <html lang="en"><head><meta charset="UTF-8">
 <title>CLC Program Changes — {for_date.strftime('%A %-d %B %Y')}</title>
 <style>
-  body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f9fafb; margin: 0; padding: 20px; color: #1a2e44; }}
+  @page {{ size: A4 landscape; margin: 12mm 14mm; }}
+  body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f9fafb; margin: 0; padding: 16px; color: #1a2e44; }}
   @media print {{
     body {{ background: white; padding: 0; }}
     .no-print {{ display: none !important; }}
-    .page {{ box-shadow: none; margin: 0; }}
+    .page {{ box-shadow: none; margin: 0; padding: 0; }}
   }}
-  .page {{ max-width: 900px; margin: 0 auto; background: white; border-radius: 12px;
-           box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 28px 32px; }}
-  h1 {{ font-size: 1.1rem; color: #1a2e44; margin: 0 0 2px; }}
-  .subtitle {{ font-size: 0.78rem; color: #6b7280; margin-bottom: 16px; }}
-  .legend {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }}
-  table {{ border-collapse: collapse; }}
+  .page {{ width: 100%; max-width: 100%; background: white; border-radius: 8px;
+           box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 20px 24px; box-sizing: border-box; }}
+  h1 {{ font-size: 1rem; color: #1a2e44; margin: 0 0 2px; }}
+  .subtitle {{ font-size: 0.75rem; color: #6b7280; margin-bottom: 12px; }}
+  .legend {{ display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }}
+  table {{ border-collapse: collapse; width: 100%; table-layout: fixed; }}
+  th, td {{ overflow: hidden; word-break: break-word; }}
 </style>
 </head><body>
 <div class="page">
