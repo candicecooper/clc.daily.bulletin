@@ -2299,11 +2299,11 @@ with page_tab:
 
             legend_items = "".join([
                 f'<span style="background:{bg};color:{c};padding:2px 8px;border-radius:10px;font-size:0.65rem;font-weight:600;">{label}</span>'
-                for label, (c, bg) in [
-                    ("JP/PY/SY Cover","#1d4ed8","#dbeafe"),
-                    ("Lunch Cover","#856404","#fff3cd"),
-                    ("Lunch Break","#004085","#cce5ff"),
-                    ("Blank = no change","#374151","#f9fafb"),
+                for label, c, bg in [
+                    ("JP/PY/SY Cover", "#1d4ed8", "#dbeafe"),
+                    ("Lunch Cover",    "#856404", "#fff3cd"),
+                    ("Lunch Break",    "#004085", "#cce5ff"),
+                    ("Blank = no change", "#374151", "#f9fafb"),
                 ]
             ])
 
