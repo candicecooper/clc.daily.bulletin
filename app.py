@@ -536,67 +536,151 @@ PC_TIME_SLOTS = [
     "1:00","1:15","1:30","1:45",
     "2:00","2:15","2:30","2:45",
 ]
-PC_SLOT_OPTIONS = ["", "JP", "PY", "SY", "Lunch Cover", "Lunch Break", "NIT", "Other"]
+PC_SLOT_OPTIONS     = ["", "JP", "PY", "SY", "Lunch Cover", "Lunch Break", "NIT", "Other"]
+PC_SLOT_OPTIONS_EXT = ["Normal Duties", "JP Cover", "PY Cover", "SY Cover", "Lunch Cover", "Lunch Break", "Other"]
+
+# Colour map for slot values (used in both edit indicators and HTML rendering)
+def _slot_color(val, dark=False):
+    _lc = ("#fff3cd", "#4a3200")
+    _lb = ("#cce5ff", "#002a4a")
+    _nd = ("#f0f0f0", "#2a2a2a")
+    _ok = ("#e8f5e1", "#1e3d1e")
+    _ot = ("#fce8ff", "#2a003a")
+    d = 1 if dark else 0
+    if val in ("Lunch Cover",):               return _lc[d]
+    if val in ("Lunch Break",):               return _lb[d]
+    if val in ("Normal Duties",):             return _nd[d]
+    if val in ("JP","PY","SY","NIT",
+               "JP Cover","PY Cover","SY Cover"): return _ok[d]
+    if val in ("Other",):                     return _ot[d]
+    return "transparent"
+
+def _slot_emoji(val):
+    m = {"JP":"🟦","PY":"🟣","SY":"🟫","JP Cover":"🟦","PY Cover":"🟣","SY Cover":"🟫",
+         "Lunch Cover":"🟡","Lunch Break":"🔵","NIT":"⬛","Normal Duties":"⬜","Other":"🔷"}
+    return m.get(val, "")
 
 def _empty_pc():
     return {
-        "change_reason": "",  # "Staff Absence" | "Site Need"
+        "change_reason": "",      # "Staff Absence" | "Site Need"
         "staff_absent": "",
         "trt": False,
         "trt_name": "",
-        "covering": "",       # "Program" | "NIT"
-        "program": "",        # "JP" | "PY" | "SY"
-        "staff_member": "",   # Site Need / no TRT
-        "release_type": "",   # release type for site need
-        "time_slots": {},     # {slot: {"value":"JP","person":""}}
+        "covering": "",           # "Program" | "NIT"  (TRT path)
+        "program": "",            # "JP" | "PY" | "SY" (TRT/Program path)
+        "time_slots": {},         # TRT path timetable
+        "staff_allocations": [],  # No-TRT path: [{name, normal_prog, time_slots}]
+        "staff_member": "",       # Site Need no-TRT
+        "release_type": "",
     }
 
-def _pc_timetable_html(entry, dark=False):
-    """Render a program change timetable as an HTML table."""
-    ts = entry.get("time_slots", {})
-    if not ts or not any(
-        (v.get("value","") if isinstance(v,dict) else v)
-        for v in ts.values()
-    ):
-        return ""
+def _empty_alloc():
+    return {"name": "", "normal_prog": "", "time_slots": {}}
 
-    lc_bg  = ("#fff3cd" if not dark else "#4a3200")   # Lunch Cover  — amber
-    lb_bg  = ("#cce5ff" if not dark else "#002a4a")   # Lunch Break  — blue
-    ok_bg  = ("#e8f5e1" if not dark else "#1e3d1e")   # Normal       — green
-    text   = ("#2d4a2d" if not dark else "#c8d8c8")
-    hdr    = ("#4a6640" if not dark else "#6BBF4E")
-    th_bg  = ("#f4f8f2" if not dark else "#111e11")
-    fs     = "0.58rem" if dark else "0.68rem"
+def _pc_row_html(label, normal_prog, ts, dark=False):
+    """Render ONE staff row as a coloured timetable strip."""
+    text  = ("#1a2e44" if not dark else "#c8d8c8")
+    hdr   = ("#4a6640" if not dark else "#6BBF4E")
+    th_bg = ("#f4f8f2" if not dark else "#111e11")
+    fs    = "0.56rem" if dark else "0.66rem"
+    lbl_c = ("#1a2e44" if not dark else "#6BBF4E")
 
-    headers = "".join([
-        f'<th style="background:{th_bg};color:{hdr};font-size:0.55rem;'
-        f'padding:2px 4px;text-align:center;white-space:nowrap;">{s}</th>'
+    # Time header row
+    th_cells = "".join([
+        f'<th style="background:{th_bg};color:{hdr};font-size:0.52rem;padding:1px 3px;'
+        f'text-align:center;white-space:nowrap;border-right:1px solid {"#e0e8dc" if not dark else "#2a3d2a"};">'
+        f'{s}</th>'
         for s in PC_TIME_SLOTS
     ])
-    cells = ""
+
+    # Data cells
+    td_cells = ""
     for slot in PC_TIME_SLOTS:
-        raw = ts.get(slot, {})
-        val    = raw.get("value","")  if isinstance(raw,dict) else raw
+        raw    = ts.get(slot, {})
+        val    = raw.get("value","")  if isinstance(raw,dict) else str(raw)
         person = raw.get("person","") if isinstance(raw,dict) else ""
-        if val == "Lunch Cover":
-            bg = lc_bg
-        elif val == "Lunch Break":
-            bg = lb_bg
-        elif val:
-            bg = ok_bg
-        else:
-            bg = "transparent"
-        inner = f"<strong>{val}</strong>"
+        bg     = _slot_color(val, dark)
+        border = f'border-right:1px solid {"#e0e8dc" if not dark else "#2a3d2a"};'
+        disp   = val if val else ("·" if not dark else "")
+        inner  = f'<span style="font-weight:700;">{disp}</span>'
         if person:
-            inner += f"<br><span style='font-size:0.9em;opacity:0.75;'>{person}</span>"
-        cells += (
+            inner += f'<br><span style="font-size:0.85em;opacity:0.7;">{person}</span>'
+        td_cells += (
             f'<td style="background:{bg};color:{text};text-align:center;'
-            f'padding:2px 3px;font-size:{fs};min-width:36px;vertical-align:top;">'
+            f'padding:2px 2px;font-size:{fs};min-width:34px;vertical-align:top;{border}">'
             f'{inner}</td>'
         )
+
+    # Row label column
+    lbl_html = (
+        f'<td style="white-space:nowrap;padding:3px 8px 3px 4px;color:{lbl_c};'
+        f'font-weight:700;font-size:{fs};vertical-align:middle;'
+        f'border-right:2px solid {"#6BBF4E" if not dark else "#4a8f33"};">'
+        f'{label}'
+        f'{"<br>" if normal_prog else ""}'
+        f'<span style="font-weight:400;opacity:0.7;font-size:0.9em;">{normal_prog}</span>'
+        f'</td>'
+    )
+
     return (
-        f'<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;">'
-        f'<tr>{headers}</tr><tr>{cells}</tr></table></div>'
+        f'<tr>'
+        f'{lbl_html}'
+        f'{td_cells}'
+        f'</tr>'
+    )
+
+def _pc_timetable_html(entry, dark=False):
+    """
+    Render an entire program change entry as an HTML table.
+    Handles both TRT (single row) and multi-staff-allocation scenarios.
+    """
+    th_bg = ("#f4f8f2" if not dark else "#111e11")
+    hdr   = ("#4a6640" if not dark else "#6BBF4E")
+
+    th_cells = (
+        '<th style="white-space:nowrap;padding:3px 8px 3px 4px;'
+        f'background:{th_bg};color:{hdr};font-size:0.52rem;'
+        f'border-right:2px solid {"#6BBF4E" if not dark else "#4a8f33"};">Staff / Role</th>'
+        + "".join([
+            f'<th style="background:{th_bg};color:{hdr};font-size:0.52rem;padding:1px 3px;'
+            f'text-align:center;white-space:nowrap;border-right:1px solid {"#e0e8dc" if not dark else "#2a3d2a"};">'
+            f'{s}</th>'
+            for s in PC_TIME_SLOTS
+        ])
+    )
+
+    rows_html = ""
+
+    # TRT path — single timetable
+    ts = entry.get("time_slots", {})
+    trt_name = entry.get("trt_name","")
+    covering = entry.get("covering","")
+    program  = entry.get("program","")
+    if ts and any((v.get("value","") if isinstance(v,dict) else v) for v in ts.values()):
+        lbl = trt_name if trt_name else "TRT"
+        norm = f"{covering} · {program}" if program else covering
+        rows_html += _pc_row_html(lbl, norm, ts, dark)
+
+    # No-TRT allocations — one row per allocated staff member
+    for alloc in entry.get("staff_allocations", []):
+        a_ts = alloc.get("time_slots", {})
+        if not a_ts or not any((v.get("value","") if isinstance(v,dict) else v) for v in a_ts.values()):
+            continue
+        rows_html += _pc_row_html(
+            alloc.get("name","(Staff)"),
+            alloc.get("normal_prog",""),
+            a_ts, dark
+        )
+
+    if not rows_html:
+        return ""
+
+    return (
+        f'<div style="overflow-x:auto;margin-top:4px;">'
+        f'<table style="border-collapse:collapse;width:auto;">'
+        f'<thead><tr>{th_cells}</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table></div>'
     )
 
 # ── AUSTRALIAN FUN FACTS — one per day, deterministic by date ────────────────
@@ -967,29 +1051,25 @@ if params.get("display") == "true":
     if pc_active:
         pc_html_parts = []
         for pc in pc_active:
-            reason  = pc.get("change_reason","")
-            absent  = pc.get("staff_absent","")
-            trt     = pc.get("trt", False)
-            trt_nm  = pc.get("trt_name","")
-            covering = pc.get("covering","")
-            prog    = pc.get("program","")
-            smember = pc.get("staff_member","")
-            rel     = pc.get("release_type","")
+            reason   = pc.get("change_reason","")
+            absent   = pc.get("staff_absent","")
+            trt      = pc.get("trt", False)
+            trt_nm   = pc.get("trt_name","")
+            smember  = pc.get("staff_member","")
+            rel      = pc.get("release_type","")
 
-            label_parts = []
-            if reason: label_parts.append(f"<strong style='color:#6BBF4E;'>{reason}</strong>")
-            if absent: label_parts.append(f"Absent: {absent}")
-            if trt and trt_nm: label_parts.append(f"TRT: {trt_nm}")
-            if covering == "Program" and prog: label_parts.append(f"Covering: {prog}")
-            elif covering == "NIT": label_parts.append("Covering: NIT")
-            if smember: label_parts.append(f"Staff: {smember}")
-            if rel: label_parts.append(f"Role: {rel}")
+            meta_parts = []
+            if reason:  meta_parts.append(f"<strong style='color:#6BBF4E;'>{reason}</strong>")
+            if absent:  meta_parts.append(f"Absent: <strong>{absent}</strong>")
+            if trt and trt_nm: meta_parts.append(f"TRT: {trt_nm}")
+            if smember: meta_parts.append(f"Staff: {smember}")
+            if rel:     meta_parts.append(f"Role: {rel}")
 
             tt_html = _pc_timetable_html(pc, dark=True)
             pc_html_parts.append(
-                f'<div style="margin-bottom:6px;">'
-                f'<div style="font-size:0.6rem;margin-bottom:3px;">{" · ".join(label_parts)}</div>'
-                f'{tt_html}'
+                f'<div style="margin-bottom:8px;">'
+                f'<div style="font-size:0.6rem;margin-bottom:4px;color:#a8c8a8;">{" · ".join(meta_parts)}</div>'
+                f'{tt_html if tt_html else "<span style=\'color:#3a5a3a;font-size:0.6rem;\'>No timetable entered</span>"}'
                 f'</div>'
             )
         st.markdown(
@@ -1613,228 +1693,410 @@ with page_tab:
     # ─────────────────────────────────────────────────────
     with s4:
 
-        # ── Manage entries list in session_state so Add works across reruns ──
+        # ─── Session-state helpers ─────────────────────────────────────────
         _pc_state_key = f"pc_n_{current_date}"
         if edit:
             if _pc_state_key not in st.session_state:
-                # Count usable new-format entries from DB
                 _loaded_pc = bulletin_data.get("program_changes", [])
-                _n_loaded = len([e for e in _loaded_pc if isinstance(e,dict) and "change_reason" in e])
+                _n_loaded  = len([e for e in _loaded_pc
+                                  if isinstance(e,dict) and "change_reason" in e])
                 st.session_state[_pc_state_key] = max(1, _n_loaded)
         else:
-            if _pc_state_key in st.session_state:
-                del st.session_state[_pc_state_key]
+            st.session_state.pop(_pc_state_key, None)
 
         _n_entries = st.session_state.get(_pc_state_key, 1)
         _loaded_pc = bulletin_data.get("program_changes", [])
 
-        # ── Helper: render one timetable entry ──────────────────────────────
-        def _render_timetable(idx, covering_mode, entry_slots, prog_default=""):
-            """Render 15-min slot grid. covering_mode = 'program' or 'nit'."""
-            # Colour hint legend
-            if covering_mode == "nit":
+        # ─── Helper: render improved timetable ────────────────────────────
+        def _render_timetable_edit(key_prefix, covering_mode, entry_slots, prog_default=""):
+            """
+            Beautiful hourly-grouped timetable editor.
+            key_prefix: unique prefix for all widget keys
+            covering_mode: 'program' | 'nit' | 'allocation'
+            """
+            opts = PC_SLOT_OPTIONS if covering_mode != "allocation" else PC_SLOT_OPTIONS_EXT
+
+            # Legend
+            st.markdown(
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'
+                '<span style="background:#e8f5e1;color:#2d6b1a;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🟩 Program</span>'
+                '<span style="background:#fff3cd;color:#856404;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🟡 Lunch Cover</span>'
+                '<span style="background:#cce5ff;color:#004085;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">🔵 Lunch Break</span>'
+                '<span style="background:#f0f0f0;color:#555;font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;">⬜ Normal Duties</span>'
+                '</div>',
+                unsafe_allow_html=True)
+
+            # Summary strip — rebuilt each render from session_state
+            strip_cells = ""
+            for _s in PC_TIME_SLOTS:
+                _v = st.session_state.get(f"{key_prefix}_{_s}", "")
+                if not _v and prog_default and covering_mode == "program":
+                    _v = prog_default
+                _bg = _slot_color(_v)
+                _em = _slot_emoji(_v) if _v else ""
+                strip_cells += (
+                    f'<td style="background:{_bg};text-align:center;padding:4px 2px;'
+                    f'min-width:36px;font-size:0.55rem;border-right:1px solid #e0e8dc;" '
+                    f'title="{_s}: {_v}">{_em}</td>'
+                )
+            st.markdown(
+                f'<div style="overflow-x:auto;margin-bottom:8px;">'
+                f'<table style="border-collapse:collapse;width:auto;">'
+                f'<tr>{"".join([f"<th style=background:#f4f8f2;color:#4a6640;font-size:0.5rem;text-align:center;padding:1px 2px;min-width:36px;border-right:1px solid #e0e8dc;>{s}</th>" for s in PC_TIME_SLOTS])}</tr>'
+                f'<tr>{strip_cells}</tr>'
+                f'</table></div>',
+                unsafe_allow_html=True)
+
+            # Hour-grouped slot editors
+            HOUR_GROUPS = [
+                ("9:00 – 10:00",  PC_TIME_SLOTS[0:4]),
+                ("10:00 – 11:00", PC_TIME_SLOTS[4:8]),
+                ("11:00 – 12:00", PC_TIME_SLOTS[8:12]),
+                ("12:00 – 1:00",  PC_TIME_SLOTS[12:16]),
+                ("1:00 – 2:00",   PC_TIME_SLOTS[16:20]),
+                ("2:00 – 2:45",   PC_TIME_SLOTS[20:24]),
+            ]
+            for grp_label, slots in HOUR_GROUPS:
                 st.markdown(
-                    '<div style="font-size:0.72rem;margin-bottom:0.5rem;">'
-                    '<span style="background:#fff3cd;padding:2px 8px;border-radius:4px;margin-right:6px;">🟡 Lunch Cover</span>'
-                    '<span style="background:#cce5ff;padding:2px 8px;border-radius:4px;">🔵 Lunch Break</span>'
-                    '</div>',
+                    f'<div style="font-size:0.65rem;font-weight:700;color:#1a2e44;'
+                    f'margin:6px 0 2px;padding:2px 6px;background:#e8f0e3;'
+                    f'border-radius:4px;display:inline-block;">{grp_label}</div>',
                     unsafe_allow_html=True)
-
-            # Render 4 slots per row (1 hour per row)
-            for row_start in range(0, len(PC_TIME_SLOTS), 4):
-                row_slots = PC_TIME_SLOTS[row_start:row_start+4]
-                cols = st.columns(4)
-                for j, slot in enumerate(row_slots):
-                    with cols[j]:
+                gcols = st.columns(len(slots))
+                for j, slot in enumerate(slots):
+                    with gcols[j]:
                         stored = entry_slots.get(slot, {})
-                        stored_val  = stored.get("value","")  if isinstance(stored,dict) else stored
+                        stored_val  = stored.get("value","")  if isinstance(stored,dict) else str(stored)
                         stored_pers = stored.get("person","") if isinstance(stored,dict) else ""
-
-                        # Default index for selectbox
-                        default_val = stored_val if stored_val else prog_default
-                        try:
-                            _def_idx = PC_SLOT_OPTIONS.index(default_val)
-                        except ValueError:
-                            _def_idx = 0
+                        default_val = stored_val if stored_val else (prog_default if covering_mode == "program" else "")
+                        try:    _def_idx = opts.index(default_val)
+                        except: _def_idx = 0
 
                         chosen = st.selectbox(
                             slot,
-                            PC_SLOT_OPTIONS,
+                            opts,
                             index=_def_idx,
-                            key=f"pc_slot_v_{idx}_{slot}",
+                            key=f"{key_prefix}_{slot}",
                         )
-
-                        # Colour highlight feedback
-                        if chosen == "Lunch Cover":
-                            st.markdown('<div style="background:#fff3cd;height:4px;border-radius:2px;"></div>', unsafe_allow_html=True)
-                        elif chosen == "Lunch Break":
-                            st.markdown('<div style="background:#cce5ff;height:4px;border-radius:2px;"></div>', unsafe_allow_html=True)
-
-                        if covering_mode == "nit":
+                        # Colour swatch
+                        _sw = _slot_color(chosen)
+                        if _sw != "transparent":
+                            st.markdown(
+                                f'<div style="background:{_sw};height:5px;'
+                                f'border-radius:0 0 3px 3px;margin-top:-4px;"></div>',
+                                unsafe_allow_html=True)
+                        # Person name field for NIT / allocation modes
+                        if covering_mode in ("nit", "allocation"):
                             st.text_input(
-                                "Name",
-                                value=stored_pers,
-                                key=f"pc_slot_p_{idx}_{slot}",
-                                placeholder="Person...",
+                                "Name", value=stored_pers,
+                                key=f"{key_prefix}_p_{slot}",
+                                placeholder="Name…",
                                 label_visibility="collapsed",
                             )
 
-        # ── Render each program change entry ────────────────────────────────
+        # ─── Helper: collect timetable values from session_state ──────────
+        def _collect_ts(key_prefix, covering_mode):
+            ts = {}
+            for slot in PC_TIME_SLOTS:
+                v = st.session_state.get(f"{key_prefix}_{slot}", "")
+                p = st.session_state.get(f"{key_prefix}_p_{slot}", "") if covering_mode in ("nit","allocation") else ""
+                if v or p:
+                    ts[slot] = {"value": v, "person": p}
+            return ts
+
+        # ─── Render VIEW mode for one PC entry ────────────────────────────
+        def _view_pc_entry(entry):
+            if not entry.get("change_reason",""):
+                st.markdown('<div class="empty-state"><div class="icon">📊</div>No change entered</div>', unsafe_allow_html=True)
+                return
+            reason  = entry.get("change_reason","")
+            absent  = entry.get("staff_absent","")
+            trt     = entry.get("trt", False)
+            trt_nm  = entry.get("trt_name","")
+            smember = entry.get("staff_member","")
+            rel     = entry.get("release_type","")
+
+            meta = []
+            if absent:  meta.append(f"**Absent:** {absent}")
+            if trt:     meta.append(f"**TRT:** {trt_nm or '(name not entered)'}")
+            else:       meta.append("**No TRT**")
+            if smember: meta.append(f"**Staff:** {smember} — {rel}")
+            st.markdown(f"**{reason}** · " + " · ".join(meta))
+
+            _tt = _pc_timetable_html(entry, dark=False)
+            if _tt:
+                st.markdown(_tt, unsafe_allow_html=True)
+
+        # ─── Render each program change entry ─────────────────────────────
         for _i in range(_n_entries):
-            # Load persisted entry data from DB for initial widget defaults
             _db_entry = _loaded_pc[_i] if _i < len(_loaded_pc) else _empty_pc()
             if not isinstance(_db_entry, dict) or "change_reason" not in _db_entry:
                 _db_entry = _empty_pc()
-            _db_ts = _db_entry.get("time_slots", {})
+            _db_ts    = _db_entry.get("time_slots", {})
+            _db_allocs = _db_entry.get("staff_allocations", [])
 
-            with st.expander(f"Program Change #{_i+1}", expanded=True):
-                # Clear button
-                _clr_col, _ = st.columns([1,5])
-                with _clr_col:
-                    if st.button("🗑️ Clear entry", key=f"pc_clr_{_i}"):
-                        # Remove all widget keys for this entry
-                        for _slot in PC_TIME_SLOTS:
-                            for _sfx in ["v","p"]:
-                                _sk = f"pc_slot_{_sfx}_{_i}_{_slot}"
-                                if _sk in st.session_state: del st.session_state[_sk]
-                        for _fld in [f"pc_reason_{_i}", f"pc_sa_{_i}", f"pc_trt_{_i}",
-                                     f"pc_trt_name_{_i}", f"pc_covering_{_i}", f"pc_prog_{_i}",
-                                     f"pc_smember_{_i}", f"pc_release_{_i}"]:
-                            if _fld in st.session_state: del st.session_state[_fld]
-                        st.rerun()
+            _exp_title = f"📋 Program Change #{_i+1}"
+            reason_now = st.session_state.get(f"pc_reason_{_i}", _db_entry.get("change_reason",""))
+            sa_now     = st.session_state.get(f"pc_sa_{_i}", _db_entry.get("staff_absent",""))
+            if sa_now:  _exp_title = f"📋 #{_i+1} — {reason_now}: {sa_now}"
+
+            with st.expander(_exp_title, expanded=(_i == 0 or bool(reason_now))):
 
                 if not edit:
-                    # View-only display for this entry
-                    if _db_entry.get("change_reason",""):
-                        st.markdown(f"**{_db_entry.get('change_reason','')}**")
-                        if _db_entry.get("staff_absent",""): st.markdown(f"Staff absent: {_db_entry['staff_absent']}")
-                        if _db_entry.get("trt",False) and _db_entry.get("trt_name",""): st.markdown(f"TRT: {_db_entry['trt_name']}")
-                        if _db_entry.get("covering",""): st.markdown(f"Covering: {_db_entry.get('covering','')} {_db_entry.get('program','')}")
-                        if _db_entry.get("staff_member",""): st.markdown(f"Staff: {_db_entry['staff_member']}")
-                        if _db_entry.get("release_type",""): st.markdown(f"Role: {_db_entry['release_type']}")
-                        _tt = _pc_timetable_html(_db_entry, dark=False)
-                        if _tt: st.markdown(_tt, unsafe_allow_html=True)
-                    else:
-                        st.markdown('<div class="empty-state"><div class="icon">📊</div>No change entered</div>', unsafe_allow_html=True)
-                    continue  # skip edit widgets
+                    _view_pc_entry(_db_entry)
+                    continue
 
-                # ── STEP 1: Reason ──────────────────────────────────────────
-                st.markdown("**Step 1 — What is the reason for this change?**")
+                # Clear button
+                _clc, _ = st.columns([1,5])
+                with _clc:
+                    if st.button("🗑️ Clear", key=f"pc_clr_{_i}", help="Clear this entry"):
+                        # Wipe all widget keys for this entry
+                        _keys_to_del = [
+                            f"pc_reason_{_i}", f"pc_sa_{_i}", f"pc_trt_{_i}",
+                            f"pc_trt_name_{_i}", f"pc_covering_{_i}", f"pc_prog_{_i}",
+                            f"pc_smember_{_i}", f"pc_release_{_i}",
+                            f"pc_alloc_n_{_i}",
+                        ]
+                        _n_a = st.session_state.get(f"pc_alloc_n_{_i}", len(_db_allocs) or 1)
+                        for _aj in range(_n_a):
+                            _keys_to_del += [f"pc_alloc_name_{_i}_{_aj}", f"pc_alloc_norm_{_i}_{_aj}"]
+                            for _sl in PC_TIME_SLOTS:
+                                _keys_to_del += [f"pc_alloc_{_i}_{_aj}_{_sl}", f"pc_alloc_{_i}_{_aj}_p_{_sl}"]
+                        for _tsl in PC_TIME_SLOTS:
+                            _keys_to_del += [f"pc_trt_{_i}_{_tsl}", f"pc_trt_{_i}_p_{_tsl}"]
+                        for _k in _keys_to_del:
+                            st.session_state.pop(_k, None)
+                        st.rerun()
+
+                st.markdown("---")
+
+                # ── STEP 1 — Reason ──────────────────────────────────────
+                st.markdown(
+                    '<div style="background:#1a2e44;color:white;font-size:0.72rem;font-weight:700;'
+                    'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                    'Step 1 — Reason for change</div>', unsafe_allow_html=True)
                 _reason_opts = ["— Select —", "Staff Absence", "Site Need"]
-                _reason_def  = _db_entry.get("change_reason","")
-                try: _r_idx = _reason_opts.index(_reason_def)
+                try:    _r_idx = _reason_opts.index(_db_entry.get("change_reason",""))
                 except: _r_idx = 0
                 _reason = st.radio(
-                    "Change reason",
-                    _reason_opts,
-                    index=_r_idx,
-                    key=f"pc_reason_{_i}",
-                    horizontal=True,
-                    label_visibility="collapsed",
-                )
+                    "Change reason", _reason_opts, index=_r_idx,
+                    key=f"pc_reason_{_i}", horizontal=True,
+                    label_visibility="collapsed")
 
+                if _reason not in ("Staff Absence", "Site Need"):
+                    continue
+
+                st.markdown("---")
+
+                # ── STEP 2 — Absent staff name ────────────────────────────
                 if _reason == "Staff Absence":
+                    st.markdown(
+                        '<div style="background:#4a7fb5;color:white;font-size:0.72rem;font-weight:700;'
+                        'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                        'Step 2 — Who is absent?</div>', unsafe_allow_html=True)
+                    st.text_input("Absent staff member", value=_db_entry.get("staff_absent",""),
+                                  key=f"pc_sa_{_i}", placeholder="e.g. John Smith",
+                                  label_visibility="collapsed")
                     st.markdown("---")
-                    st.markdown("**Step 2 — Staff member absent**")
-                    st.text_input("Name of absent staff member", value=_db_entry.get("staff_absent",""),
-                                  key=f"pc_sa_{_i}", placeholder="e.g. John Smith")
 
-                    st.markdown("**Step 3 — Is a TRT involved?**")
-                    _trt = st.checkbox("Yes, a TRT is covering", value=bool(_db_entry.get("trt",False)), key=f"pc_trt_{_i}")
-                    if _trt:
-                        st.text_input("TRT name", value=_db_entry.get("trt_name",""), key=f"pc_trt_name_{_i}", placeholder="e.g. Ms Jones")
-                        st.markdown("**Step 4 — What is the TRT covering?**")
-                        _cov_opts = ["Program", "NIT"]
-                        try: _cov_idx = _cov_opts.index(_db_entry.get("covering","Program"))
-                        except: _cov_idx = 0
-                        _covering = st.radio("TRT covering", _cov_opts, index=_cov_idx,
-                                             key=f"pc_covering_{_i}", horizontal=True,
-                                             label_visibility="collapsed")
+                # ── STEP 3 — TRT? ─────────────────────────────────────────
+                _step_n = 3 if _reason == "Staff Absence" else 2
+                st.markdown(
+                    f'<div style="background:#6a4a9a;color:white;font-size:0.72rem;font-weight:700;'
+                    f'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                    f'Step {_step_n} — Is a TRT covering?</div>', unsafe_allow_html=True)
+                _trt = st.checkbox("Yes — a TRT is coming in",
+                                   value=bool(_db_entry.get("trt", False)),
+                                   key=f"pc_trt_{_i}")
 
-                        if _covering == "Program":
-                            st.markdown("**Step 5 — Which program?**")
-                            _prog_opts = ["JP", "PY", "SY"]
-                            try: _prog_idx = _prog_opts.index(_db_entry.get("program","JP"))
-                            except: _prog_idx = 0
-                            _prog = st.radio("Program", _prog_opts, index=_prog_idx,
-                                             key=f"pc_prog_{_i}", horizontal=True,
-                                             label_visibility="collapsed")
-                            st.markdown(f"**Timetable — auto-filled as {_prog} (all slots editable):**")
-                            _render_timetable(_i, "program", _db_ts, prog_default=_prog)
-                        else:  # NIT
-                            st.markdown("**Timetable — NIT coverage (enter details per slot):**")
-                            _render_timetable(_i, "nit", _db_ts)
-
-                elif _reason == "Site Need":
+                if _trt:
+                    # ── TRT path ─────────────────────────────────────────
+                    st.text_input("TRT name", value=_db_entry.get("trt_name",""),
+                                  key=f"pc_trt_name_{_i}", placeholder="e.g. Ms Jones")
                     st.markdown("---")
-                    st.markdown("**Step 2 — Is a TRT involved?**")
-                    _trt = st.checkbox("Yes, a TRT is covering", value=bool(_db_entry.get("trt",False)), key=f"pc_trt_{_i}")
-                    if _trt:
-                        st.text_input("TRT name", value=_db_entry.get("trt_name",""), key=f"pc_trt_name_{_i}", placeholder="e.g. Ms Jones")
-                        st.markdown("**Step 3 — What is the TRT covering?**")
-                        _cov_opts = ["Program", "NIT"]
-                        try: _cov_idx = _cov_opts.index(_db_entry.get("covering","Program"))
-                        except: _cov_idx = 0
-                        _covering = st.radio("TRT covering", _cov_opts, index=_cov_idx,
-                                             key=f"pc_covering_{_i}", horizontal=True,
-                                             label_visibility="collapsed")
-                        if _covering == "Program":
-                            _prog_opts = ["JP", "PY", "SY"]
-                            try: _prog_idx = _prog_opts.index(_db_entry.get("program","JP"))
-                            except: _prog_idx = 0
-                            _prog = st.radio("Program", _prog_opts, index=_prog_idx,
-                                             key=f"pc_prog_{_i}", horizontal=True,
-                                             label_visibility="collapsed")
-                            st.markdown(f"**Timetable — auto-filled as {_prog} (all slots editable):**")
-                            _render_timetable(_i, "program", _db_ts, prog_default=_prog)
-                        else:
-                            st.markdown("**Timetable — NIT coverage (enter details per slot):**")
-                            _render_timetable(_i, "nit", _db_ts)
+                    st.markdown(
+                        f'<div style="background:#4a8f33;color:white;font-size:0.72rem;font-weight:700;'
+                        f'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                        f'Step {_step_n+1} — What is the TRT covering?</div>', unsafe_allow_html=True)
+                    _cov_opts = ["Program", "NIT"]
+                    try:    _cov_idx = _cov_opts.index(_db_entry.get("covering","Program"))
+                    except: _cov_idx = 0
+                    _covering = st.radio("TRT covering", _cov_opts, index=_cov_idx,
+                                         key=f"pc_covering_{_i}", horizontal=True,
+                                         label_visibility="collapsed")
+
+                    if _covering == "Program":
+                        st.markdown("---")
+                        st.markdown(
+                            f'<div style="background:#c97b1a;color:white;font-size:0.72rem;font-weight:700;'
+                            f'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                            f'Step {_step_n+2} — Which program?</div>', unsafe_allow_html=True)
+                        _prog_opts = ["JP", "PY", "SY"]
+                        try:    _prog_idx = _prog_opts.index(_db_entry.get("program","JP"))
+                        except: _prog_idx = 0
+                        _prog = st.radio("Program", _prog_opts, index=_prog_idx,
+                                         key=f"pc_prog_{_i}", horizontal=True,
+                                         label_visibility="collapsed")
+                        st.markdown("---")
+                        st.markdown(
+                            f'<div style="background:#4a8f33;color:white;font-size:0.72rem;font-weight:700;'
+                            f'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:4px;">'
+                            f'Timetable — auto-filled as {_prog} · edit any slot as needed</div>',
+                            unsafe_allow_html=True)
+                        _render_timetable_edit(f"pc_trt_{_i}", "program", _db_ts, prog_default=_prog)
                     else:
-                        # No TRT — choose staff member and release type
-                        st.markdown("**Step 3 — Which staff member?**")
+                        st.markdown("---")
+                        st.markdown(
+                            '<div style="background:#4a8f33;color:white;font-size:0.72rem;font-weight:700;'
+                            'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:4px;">'
+                            'Timetable — NIT day · enter slot details</div>',
+                            unsafe_allow_html=True)
+                        _render_timetable_edit(f"pc_trt_{_i}", "nit", _db_ts)
+
+                else:
+                    # ── No TRT ────────────────────────────────────────────
+                    if _reason == "Staff Absence":
+                        # Staff allocations: who is covering which parts of the day
+                        st.markdown("---")
+                        st.markdown(
+                            '<div style="background:#b91c1c;color:white;font-size:0.72rem;font-weight:700;'
+                            'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                            'Step 4 — No TRT: allocate existing staff to cover the day</div>',
+                            unsafe_allow_html=True)
+                        st.markdown(
+                            '<div style="font-size:0.78rem;color:#5a6e5a;margin-bottom:10px;">'
+                            'Add each staff member who has a change to their day. '
+                            'Their timetable shows what they\'re doing each slot — '
+                            'normal duties or a change (program cover, lunch cover, etc.)</div>',
+                            unsafe_allow_html=True)
+
+                        # Number of allocations
+                        _alloc_key = f"pc_alloc_n_{_i}"
+                        if _alloc_key not in st.session_state:
+                            st.session_state[_alloc_key] = max(1, len(_db_allocs))
+                        _n_allocs = st.session_state[_alloc_key]
+
+                        for _j in range(_n_allocs):
+                            _db_alloc = _db_allocs[_j] if _j < len(_db_allocs) else _empty_alloc()
+                            _alloc_ts = _db_alloc.get("time_slots", {})
+
+                            st.markdown(
+                                f'<div style="background:#f0f4f0;border:1.5px solid #c8dcc0;'
+                                f'border-left:4px solid #6BBF4E;border-radius:8px;'
+                                f'padding:10px 12px;margin:8px 0 4px;">'
+                                f'<div style="font-size:0.72rem;font-weight:700;color:#1a2e44;'
+                                f'margin-bottom:6px;">👤 Staff Member #{_j+1}</div>',
+                                unsafe_allow_html=True)
+
+                            _an1, _an2, _an3 = st.columns([2,2,1])
+                            with _an1:
+                                st.text_input(
+                                    "Staff member name",
+                                    value=_db_alloc.get("name",""),
+                                    key=f"pc_alloc_name_{_i}_{_j}",
+                                    placeholder="e.g. Sarah")
+                            with _an2:
+                                _norm_opts = ["","JP","PY","SY","NIT","Other"]
+                                try:    _norm_idx = _norm_opts.index(_db_alloc.get("normal_prog",""))
+                                except: _norm_idx = 0
+                                st.selectbox(
+                                    "Their normal program/role",
+                                    _norm_opts,
+                                    index=_norm_idx,
+                                    key=f"pc_alloc_norm_{_i}_{_j}")
+                            with _an3:
+                                st.markdown("<div style='padding-top:1.7rem;'>", unsafe_allow_html=True)
+                                if st.button("🗑️", key=f"pc_alloc_del_{_i}_{_j}", help="Remove this allocation"):
+                                    # Remove widget state for this alloc
+                                    for _sl in PC_TIME_SLOTS:
+                                        st.session_state.pop(f"pc_alloc_{_i}_{_j}_{_sl}", None)
+                                        st.session_state.pop(f"pc_alloc_{_i}_{_j}_p_{_sl}", None)
+                                    st.session_state.pop(f"pc_alloc_name_{_i}_{_j}", None)
+                                    st.session_state.pop(f"pc_alloc_norm_{_i}_{_j}", None)
+                                    st.session_state[_alloc_key] = max(1, _n_allocs - 1)
+                                    st.rerun()
+                                st.markdown("</div>", unsafe_allow_html=True)
+
+                            st.markdown("</div>", unsafe_allow_html=True)
+
+                            st.markdown(
+                                '<div style="font-size:0.68rem;color:#4a6a4a;margin:4px 0 6px;font-style:italic;">'
+                                '▶ Fill in the timetable — what this staff member is doing each 15-min slot:</div>',
+                                unsafe_allow_html=True)
+                            _render_timetable_edit(f"pc_alloc_{_i}_{_j}", "allocation", _alloc_ts)
+
+                        # Add allocation button
+                        if st.button(f"➕ Add another staff member", key=f"pc_alloc_add_{_i}"):
+                            st.session_state[_alloc_key] = _n_allocs + 1
+                            st.rerun()
+
+                    else:  # Site Need, no TRT
+                        st.markdown("---")
+                        st.markdown(
+                            '<div style="background:#0e7490;color:white;font-size:0.72rem;font-weight:700;'
+                            'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                            'Step 3 — Which staff member?</div>', unsafe_allow_html=True)
                         st.text_input("Staff member name", value=_db_entry.get("staff_member",""),
-                                      key=f"pc_smember_{_i}", placeholder="e.g. Sarah")
-                        st.markdown("**Step 4 — What is their role in this change?**")
+                                      key=f"pc_smember_{_i}", placeholder="e.g. Sarah",
+                                      label_visibility="collapsed")
+                        st.markdown("---")
+                        st.markdown(
+                            '<div style="background:#0e7490;color:white;font-size:0.72rem;font-weight:700;'
+                            'padding:4px 10px;border-radius:6px;display:inline-block;margin-bottom:6px;">'
+                            'Step 4 — What is their role in this change?</div>', unsafe_allow_html=True)
                         _rel_opts = [
                             "— Select —",
                             "Receiving release time",
                             "Covering release time for staff member",
                             "Covering Lunch cover",
                         ]
-                        try: _rel_idx = _rel_opts.index(_db_entry.get("release_type",""))
+                        try:    _rel_idx = _rel_opts.index(_db_entry.get("release_type",""))
                         except: _rel_idx = 0
                         st.radio("Role", _rel_opts, index=_rel_idx,
                                  key=f"pc_release_{_i}", horizontal=False,
                                  label_visibility="collapsed")
 
-        # ── Add entry button ─────────────────────────────────────────────────
+        # ── Add entry button ───────────────────────────────────────────────
         if edit:
             st.markdown("")
-            if st.button("➕ Add another program change", key="pc_add_entry"):
+            if st.button("➕ Add another program change", key="pc_add_entry", type="secondary"):
                 st.session_state[_pc_state_key] = _n_entries + 1
                 st.rerun()
 
-        # ── Collect all entry values into bulletin_data for save ─────────────
+        # ── Collect all values for save ────────────────────────────────────
         if edit:
             _collected_pc = []
             for _i in range(_n_entries):
-                _ts = {}
-                for _slot in PC_TIME_SLOTS:
-                    _v = st.session_state.get(f"pc_slot_v_{_i}_{_slot}", "")
-                    _p = st.session_state.get(f"pc_slot_p_{_i}_{_slot}", "")
-                    if _v or _p:
-                        _ts[_slot] = {"value": _v, "person": _p}
+                _reason_val = st.session_state.get(f"pc_reason_{_i}", "")
+                _trt_val    = st.session_state.get(f"pc_trt_{_i}", False)
+
+                # TRT timetable
+                _trt_ts = _collect_ts(f"pc_trt_{_i}", st.session_state.get(f"pc_covering_{_i}", ""))
+
+                # Staff allocations (no-TRT absence path)
+                _alloc_n = st.session_state.get(f"pc_alloc_n_{_i}",
+                           len(_loaded_pc[_i].get("staff_allocations",[]) if _i < len(_loaded_pc) else []))
+                _allocs = []
+                for _j in range(max(_alloc_n, 0)):
+                    _a_cov_mode = "allocation"
+                    _a_ts = _collect_ts(f"pc_alloc_{_i}_{_j}", _a_cov_mode)
+                    _allocs.append({
+                        "name":        st.session_state.get(f"pc_alloc_name_{_i}_{_j}", ""),
+                        "normal_prog": st.session_state.get(f"pc_alloc_norm_{_i}_{_j}", ""),
+                        "time_slots":  _a_ts,
+                    })
+
                 _e = {
-                    "change_reason":  st.session_state.get(f"pc_reason_{_i}", ""),
-                    "staff_absent":   st.session_state.get(f"pc_sa_{_i}", ""),
-                    "trt":            st.session_state.get(f"pc_trt_{_i}", False),
-                    "trt_name":       st.session_state.get(f"pc_trt_name_{_i}", ""),
-                    "covering":       st.session_state.get(f"pc_covering_{_i}", ""),
-                    "program":        st.session_state.get(f"pc_prog_{_i}", ""),
-                    "staff_member":   st.session_state.get(f"pc_smember_{_i}", ""),
-                    "release_type":   st.session_state.get(f"pc_release_{_i}", ""),
-                    "time_slots":     _ts,
+                    "change_reason":     _reason_val,
+                    "staff_absent":      st.session_state.get(f"pc_sa_{_i}", ""),
+                    "trt":               _trt_val,
+                    "trt_name":          st.session_state.get(f"pc_trt_name_{_i}", ""),
+                    "covering":          st.session_state.get(f"pc_covering_{_i}", ""),
+                    "program":           st.session_state.get(f"pc_prog_{_i}", ""),
+                    "time_slots":        _trt_ts,
+                    "staff_allocations": _allocs,
+                    "staff_member":      st.session_state.get(f"pc_smember_{_i}", ""),
+                    "release_type":      st.session_state.get(f"pc_release_{_i}", ""),
                 }
                 _collected_pc.append(_e)
             bulletin_data["program_changes"] = _collected_pc
