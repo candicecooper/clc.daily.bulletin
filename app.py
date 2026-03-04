@@ -604,7 +604,13 @@ def _pc_row_html(label, normal_prog, ts, dark=False):
         disp   = val if val else ("·" if not dark else "")
         inner  = f'<span style="font-weight:700;">{disp}</span>'
         if person:
-            inner += f'<br><span style="font-size:0.85em;opacity:0.7;">{person}</span>'
+            if val == "Lunch Cover":
+                _plbl = f"→ {person}"   # "releasing" arrow
+            elif val == "Lunch Break":
+                _plbl = f"↩ {person}"   # "covered by" arrow
+            else:
+                _plbl = person
+            inner += f'<br><span style="font-size:0.85em;opacity:0.7;">{_plbl}</span>'
         td_cells += (
             f'<td style="background:{bg};color:{text};text-align:center;'
             f'padding:2px 2px;font-size:{fs};min-width:34px;vertical-align:top;{border}">'
@@ -1785,12 +1791,29 @@ with page_tab:
                                 f'<div style="background:{_sw};height:5px;'
                                 f'border-radius:0 0 3px 3px;margin-top:-4px;"></div>',
                                 unsafe_allow_html=True)
-                        # Person name field for NIT / allocation modes
-                        if covering_mode in ("nit", "allocation"):
+                        # Person name field:
+                        #   • Always shown in nit / allocation modes (any slot)
+                        #   • In program mode: shown only when Lunch Cover or Lunch Break
+                        #     with a contextual prompt so it's crystal clear what to enter
+                        _show_person = covering_mode in ("nit", "allocation") or chosen in ("Lunch Cover", "Lunch Break")
+                        if _show_person:
+                            if chosen == "Lunch Cover":
+                                _ph = "Teacher being released for lunch…"
+                                _lbl = "👤 Releasing:"
+                            elif chosen == "Lunch Break":
+                                _ph = "Who is covering / releasing them…"
+                                _lbl = "👤 Covered by:"
+                            else:
+                                _ph = "Name…"
+                                _lbl = "Name"
+                            st.markdown(
+                                f'<div style="font-size:0.6rem;color:#5a7a5a;'
+                                f'font-weight:600;margin-top:2px;">{_lbl}</div>',
+                                unsafe_allow_html=True)
                             st.text_input(
-                                "Name", value=stored_pers,
+                                _lbl, value=stored_pers,
                                 key=f"{key_prefix}_p_{slot}",
-                                placeholder="Name…",
+                                placeholder=_ph,
                                 label_visibility="collapsed",
                             )
 
@@ -1799,7 +1822,9 @@ with page_tab:
             ts = {}
             for slot in PC_TIME_SLOTS:
                 v = st.session_state.get(f"{key_prefix}_{slot}", "")
-                p = st.session_state.get(f"{key_prefix}_p_{slot}", "") if covering_mode in ("nit","allocation") else ""
+                # Always try to read person — it may have been entered for Lunch Cover/Break
+                # even in program mode, or for any slot in nit/allocation mode
+                p = st.session_state.get(f"{key_prefix}_p_{slot}", "")
                 if v or p:
                     ts[slot] = {"value": v, "person": p}
             return ts
