@@ -804,7 +804,7 @@ if params.get("display") == "true":
 
     st.markdown("""
     <style>
-    [data-testid="stAppViewContainer"] { background: #0f1a0f !important; }
+    [data-testid="stAppViewContainer"] { background: #f4f8f2 !important; }
     .main .block-container { padding: 0 !important; max-width: 100% !important; }
     [data-testid="stHeader"] { display: none; }
     #MainMenu, footer, .stDeployButton { display: none; }
@@ -833,7 +833,7 @@ if params.get("display") == "true":
     st.markdown(f"""
     <style>
     .display-header {{
-      background: linear-gradient(135deg, #1a2e44 0%, #1e3d1e 100%);
+      background: linear-gradient(135deg, #1a4d8c 0%, #2d7d4f 100%);
       padding: 0.6rem 1.5rem;
       display: flex; align-items: center; justify-content: space-between;
       border-bottom: 3px solid #6BBF4E;
@@ -841,7 +841,7 @@ if params.get("display") == "true":
     .display-header-title {{ font-family: 'Playfair Display', serif; font-size: 1.1rem; color: white; font-weight: 700; letter-spacing: 0.05em; }}
     .display-header-date {{ font-family: 'DM Mono', monospace; font-size: 1rem; color: #6BBF4E; font-weight: 600; letter-spacing: 0.08em; }}
     .display-header-time {{ font-family: 'DM Mono', monospace; font-size: 1.4rem; color: #e8a125; font-weight: 700; }}
-    .dp {{ background: #1a2a1a; border: 1px solid #2a3d2a; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }}
+    .dp {{ background: #ffffff; border: 1px solid #d8ead8; border-radius: 8px; overflow: hidden; margin-bottom: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }}
     .dp-header {{ padding: 0.3rem 0.6rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: white; }}
     .dp-header.green  {{ background: #4a8f33; }}
     .dp-header.navy   {{ background: #1a2e44; }}
@@ -851,23 +851,23 @@ if params.get("display") == "true":
     .dp-header.purple {{ background: #6a4a9a; }}
     .dp-header.slate  {{ background: #4a5a6a; }}
     .dp-body {{ padding: 0.4rem 0.5rem; }}
-    .dt {{ width: 100%; border-collapse: collapse; font-size: 0.62rem; color: #c8d8c8; font-family: 'DM Sans', sans-serif; }}
+    .dt {{ width: 100%; border-collapse: collapse; font-size: 0.62rem; color: #1e3a1e; font-family: 'DM Sans', sans-serif; }}
     .dt th {{ color: #6BBF4E; font-weight: 600; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2rem 0.3rem; border-bottom: 1px solid #2a3d2a; }}
-    .dt td {{ padding: 0.18rem 0.3rem; border-bottom: 1px solid #1e2e1e; vertical-align: top; line-height: 1.3; }}
+    .dt td {{ padding: 0.18rem 0.3rem; border-bottom: 1px solid #e8f0e8; vertical-align: top; line-height: 1.3; }}
     .dt tr:last-child td {{ border-bottom: none; }}
-    .dt-em {{ color: #3a4a3a; font-style: italic; font-size: 0.55rem; }}
-    .dp-empty {{ color: #3a4a3a; font-size: 0.6rem; padding: 0.3rem; font-style: italic; font-family: 'DM Sans', sans-serif; }}
+    .dt-em {{ color: #9aaa9a; font-style: italic; font-size: 0.55rem; }}
+    .dp-empty {{ color: #9aaa9a; font-size: 0.6rem; padding: 0.3rem; font-style: italic; font-family: 'DM Sans', sans-serif; }}
     .vb-time {{ font-family: 'DM Mono', monospace; font-size: 0.58rem; color: #5a7a5a; }}
-    .vb-tag {{ background: #2a4a2a; color: #6BBF4E; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; }}
+    .vb-tag {{ background: #e8f5e1; color: #2d6b1a; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; }}
     .kitchen-val {{ background: #c97b1a; border-radius: 4px; padding: 0.1rem 0.4rem; color: #1a2e44; font-weight: 800; font-size: 0.65rem; display: inline-block; }}
     .resp-label {{ font-size: 0.58rem; color: #6BBF4E; font-weight: 600; }}
-    .resp-val {{ font-size: 0.62rem; color: #c8d8c8; }}
-    .fact-bar {{ background: #1e2e1e; border-top: 2px solid #2a3d2a; padding: 0.4rem 1.5rem; font-size: 0.72rem; color: #a8c8a8; display: flex; align-items: center; gap: 0.75rem; font-family: 'DM Sans', sans-serif; }}
+    .resp-val {{ font-size: 0.62rem; color: #2d3d2d; }}
+    .fact-bar {{ background: #f0f8ee; border-top: 2px solid #c8e0c8; padding: 0.4rem 1.5rem; font-size: 0.72rem; color: #3a5a3a; display: flex; align-items: center; gap: 0.75rem; font-family: 'DM Sans', sans-serif; }}
     .fact-label {{ color: #e8a125; font-weight: 700; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }}
     .pc-wrap {{ overflow-x: auto; }}
     .pc-table {{ min-width: 900px; }}
     .slot {{ text-align: center; font-family: 'DM Mono', monospace; font-size: 0.55rem; }}
-    .slot.filled {{ background: #1e3d1e; color: #6BBF4E; font-weight: 600; }}
+    .slot.filled {{ background: #e8f5e1; color: #2d6b1a; font-weight: 600; }}
     </style>
 
     <div class="display-header">
@@ -892,7 +892,7 @@ if params.get("display") == "true":
             st.rerun()
     with dn_label:
         st.markdown(
-            f'<div style="text-align:center;color:#6BBF4E;font-size:0.75rem;font-weight:700;'
+            f'<div style="text-align:center;color:#2d7d4f;font-size:0.75rem;font-weight:700;'
             f'font-family:DM Mono,monospace;letter-spacing:0.08em;padding:0.45rem 0;">'
             f'VIEWING: {today.strftime("%A %-d %B %Y").upper()}</div>',
             unsafe_allow_html=True)
@@ -923,9 +923,9 @@ if params.get("display") == "true":
                 f'<span style="background:{nc["bg"]};color:{nc["color"]};font-size:0.58rem;'
                 f'font-weight:700;text-transform:uppercase;letter-spacing:0.06em;'
                 f'padding:0.1rem 0.4rem;border-radius:10px;">{cat}</span> '
-                f'<strong style="color:#c8d8c8;font-size:0.65rem;">{n.get("title","")}</strong>'
-                f'<span style="color:#8aaa8a;font-size:0.62rem;"> — {n.get("body","")}</span>'
-                f'<span style="color:#4a6a4a;font-size:0.58rem;"> · {n.get("submitted_by","")}</span>'
+                f'<strong style="color:#1a2e44;font-size:0.65rem;">{n.get("title","")}</strong>'
+                f'<span style="color:#4a6a4a;font-size:0.62rem;"> — {n.get("body","")}</span>'
+                f'<span style="color:#7a9a7a;font-size:0.58rem;"> · {n.get("submitted_by","")}</span>'
             )
         n_html = "<br>".join(n_parts)
         st.markdown(
