@@ -795,8 +795,14 @@ def delete_notice(nid):
 params = st.query_params
 if params.get("display") == "true":
 
-    # Date selection — session state, then today
+    # Always show today — reset to today on every fresh load
+    # If manually navigated, honour that; midnight will naturally flip to new day
+    import time
     if "display_date" not in st.session_state:
+        st.session_state.display_date = date.today()
+
+    # Midnight rollover — if the stored date is in the past, snap back to today
+    if st.session_state.display_date < date.today():
         st.session_state.display_date = date.today()
 
     today = st.session_state.display_date
@@ -815,12 +821,13 @@ if params.get("display") == "true":
     </style>
     """, unsafe_allow_html=True)
 
-    # Auto-refresh every 5 minutes using Streamlit
-    import time
+    # Auto-refresh every 60 seconds — keeps data current and rolls over at midnight
     if "display_last_refresh" not in st.session_state:
         st.session_state.display_last_refresh = time.time()
-    if time.time() - st.session_state.display_last_refresh > 300:
+    if time.time() - st.session_state.display_last_refresh > 60:
         st.session_state.display_last_refresh = time.time()
+        # Snap to today on each refresh cycle
+        st.session_state.display_date = date.today()
         st.rerun()
 
     # Google fonts
